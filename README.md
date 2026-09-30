@@ -715,3 +715,7 @@ If you find this project useful, please consider:
 [⬆ Back to Top](#-betNANDO)
 
 </div>
+=======
+# betv2
+betting script for platinum league
+
