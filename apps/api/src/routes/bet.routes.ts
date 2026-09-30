@@ -4,6 +4,7 @@ import { authenticate, requireAdmin } from '../middleware/auth';
 import { validate } from '../middleware/validation';
 import { placeBetSchema, paginationSchema } from '../config/env';
 import { AuthRequest } from '../middleware/auth';
+import { settleRunning, setSettleRunning } from '../lib/settlement-lock';
 
 const router = Router();
 
@@ -63,13 +64,19 @@ router.post('/:id/cancel', authenticate, async (req: AuthRequest, res) => {
 });
 
 // Manual settlement trigger (admin only)
+// The lock itself lives in lib/settlement-lock.ts so this route and the cron
+// endpoint in index.ts cannot run settlement concurrently.
 router.post('/settle', authenticate, requireAdmin, async (req: AuthRequest, res) => {
+  if (settleRunning) return res.status(409).json({ error: 'Already running' });
+  setSettleRunning(true);
   try {
     await betService.settlePendingBets();
     res.json({ message: 'Settlement executado' });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Erro interno';
     res.status(500).json({ error: message });
+  } finally {
+    setSettleRunning(false);
   }
 });
 

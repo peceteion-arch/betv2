@@ -26,6 +26,7 @@ services:
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/betnando?schema=public
       JWT_SECRET: ${JWT_SECRET:-your-secret-key}
+      CRON_SECRET: ${CRON_SECRET:-your-cron-secret-key}
       PORT: 3001
       FRONTEND_URL: http://localhost:5173
     ports:

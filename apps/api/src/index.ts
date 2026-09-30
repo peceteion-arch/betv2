@@ -14,6 +14,7 @@ import adminRoutes from './routes/admin.routes';
 import { matchService } from './services/match.service';
 import { betService } from './services/bet.service';
 import { env } from './config/env';
+import { settleRunning, setSettleRunning } from './lib/settlement-lock';
 import swaggerUi from 'swagger-ui-express';
 import { swaggerSpec } from './config/swagger';
 import { existsSync } from 'fs';
@@ -21,15 +22,8 @@ import { join } from 'path';
 
 const app = express();
 
-// Validate required env vars
-if (!env.JWT_SECRET) {
-  console.error('FATAL: JWT_SECRET environment variable is required');
-  process.exit(1);
-}
-if (!env.DATABASE_URL) {
-  console.error('FATAL: DATABASE_URL environment variable is required');
-  process.exit(1);
-}
+// Required env vars (JWT_SECRET, CRON_SECRET, DATABASE_URL) are validated at
+// startup in config/env.ts — importing it above already throws if any is missing.
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
@@ -57,10 +51,10 @@ app.use('/api/auth/register', authLimiter);
 
 // Cron endpoints (protected by CRON_SECRET)
 let syncRunning = false;
-let settleRunning = false;
 
 app.get('/api/cron/sync', async (req: Request, res: Response) => {
-  if (req.headers.authorization !== `Bearer ${env.CRON_SECRET}`) {
+  const provided = req.headers.authorization?.replace('Bearer ', '') ?? '';
+  if (!provided || provided !== env.CRON_SECRET) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   if (syncRunning) return res.status(409).json({ error: 'Already running' });
@@ -76,18 +70,19 @@ app.get('/api/cron/sync', async (req: Request, res: Response) => {
 });
 
 app.get('/api/cron/settle', async (req: Request, res: Response) => {
-  if (req.headers.authorization !== `Bearer ${env.CRON_SECRET}`) {
+  const provided = req.headers.authorization?.replace('Bearer ', '') ?? '';
+  if (!provided || provided !== env.CRON_SECRET) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   if (settleRunning) return res.status(409).json({ error: 'Already running' });
-  settleRunning = true;
+  setSettleRunning(true);
   try {
     await betService.settlePendingBets();
     res.json({ ok: true });
   } catch (error) {
     res.status(500).json({ error: 'Settlement failed' });
   } finally {
-    settleRunning = false;
+    setSettleRunning(false);
   }
 });
 

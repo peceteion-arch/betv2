@@ -3,6 +3,19 @@ import { notificationService } from './notification.service';
 import { userService } from './user.service';
 import { Prisma } from '@prisma/client';
 
+// stake/totalOdds/potentialReturn and BetSelection.odds are @db.Decimal, so
+// they serialise to JSON strings and the UI's .toFixed() crashes. Same
+// normalisation the user/admin services already apply to balance and profit.
+const mapBet = (bet: any) => ({
+  ...bet,
+  stake: Number(bet.stake),
+  totalOdds: Number(bet.totalOdds),
+  potentialReturn: Number(bet.potentialReturn),
+  ...(bet.selections && {
+    selections: bet.selections.map((s: any) => ({ ...s, odds: Number(s.odds) })),
+  }),
+});
+
 export const betService = {
   async placeBet(userId: string, stake: number, selections: Array<{
     matchId: string;
@@ -79,7 +92,7 @@ export const betService = {
 
     await notificationService.create(userId, 'BET_CREATED', `Aposta de ${stake} CR colocada @ ${totalOdds.toFixed(2)}`);
 
-    return bet;
+    return mapBet(bet);
   },
 
   async listByUser(userId: string, status?: string, cursor?: string, limit: number = 20) {
@@ -102,7 +115,7 @@ export const betService = {
 
     const bets = await prisma.bet.findMany(query);
     const hasMore = bets.length > limit;
-    const items = hasMore ? bets.slice(0, limit) : bets;
+    const items = (hasMore ? bets.slice(0, limit) : bets).map(mapBet);
 
     return {
       items,
@@ -123,7 +136,7 @@ export const betService = {
       const user = await prisma.user.findUnique({ where: { id: userId } });
       if (user?.role !== 'ADMIN') throw new Error('Not your bet');
     }
-    return bet;
+    return mapBet(bet);
   },
 
   async cancel(betId: string, userId: string) {
@@ -144,9 +157,8 @@ export const betService = {
       });
     });
 
-    return result;
+    return mapBet(result);
   },
-
   async settlePendingBets() {
     await prisma.$transaction(async (tx) => {
       const pendingBets = await tx.bet.findMany({
@@ -201,48 +213,47 @@ export const betService = {
         }
 
         if (anyLost) {
-          const profit = -Number(bet.stake);
-          await tx.bet.update({
-            where: { id: bet.id },
+          const lost = await tx.bet.updateMany({
+            where: { id: bet.id, status: 'PENDING' },
             data: { status: 'LOST', settledAt: new Date() },
           });
-          await tx.user.update({
-            where: { id: bet.userId },
-            data: { profit: { increment: profit } },
-          });
-          await notificationService.create(bet.userId, 'BET_LOST', `Perdeste ${Number(bet.stake).toFixed(2)} créditos - multipla perdida`);
+          if (lost.count !== 1) continue;
+
+          await userService.updateStats(bet.userId, false, -Number(bet.stake), Number(bet.stake), tx);
+          await notificationService.create(bet.userId, 'BET_LOST', `Perdeste ${Number(bet.stake).toFixed(2)} créditos - multipla perdida`, tx);
           continue;
         }
 
         if (!allFinished) continue;
 
         if (anyVoid) {
-          await tx.bet.update({
-            where: { id: bet.id },
+          const cancelled = await tx.bet.updateMany({
+            where: { id: bet.id, status: 'PENDING' },
             data: { status: 'CANCELLED', settledAt: new Date() },
           });
+          if (cancelled.count !== 1) continue;
+
           await tx.user.update({
             where: { id: bet.userId },
             data: { balance: { increment: bet.stake } },
           });
-          await notificationService.create(bet.userId, 'BET_CANCELLED', `Aposta anulada - push/void. ${Number(bet.stake).toFixed(2)} créditos devolvidos`);
+          await notificationService.create(bet.userId, 'BET_CANCELLED', `Aposta anulada - push/void. ${Number(bet.stake).toFixed(2)} créditos devolvidos`, tx);
           continue;
         }
 
         const profit = Number(bet.potentialReturn) - Number(bet.stake);
-        await tx.bet.update({
-          where: { id: bet.id },
+        const won = await tx.bet.updateMany({
+          where: { id: bet.id, status: 'PENDING' },
           data: { status: 'WON', settledAt: new Date() },
         });
+        if (won.count !== 1) continue;
+
         await tx.user.update({
           where: { id: bet.userId },
           data: { balance: { increment: bet.potentialReturn } },
         });
-        await tx.user.update({
-          where: { id: bet.userId },
-          data: { profit: { increment: profit } },
-        });
-        await notificationService.create(bet.userId, 'BET_WON', `Ganhaste ${Number(bet.potentialReturn).toFixed(2)} créditos!`);
+        await userService.updateStats(bet.userId, true, profit, Number(bet.stake), tx);
+        await notificationService.create(bet.userId, 'BET_WON', `Ganhaste ${Number(bet.potentialReturn).toFixed(2)} créditos!`, tx);
       }
     });
   },
@@ -297,8 +308,10 @@ export const betService = {
       }
 
       case 'RESULTADO_INTERVALO':
-        if (htHome === null || htHome === undefined) return false;
-        if (htAway === null || htAway === undefined) return false;
+        // No feed populates halfTime scores, so this market can never be
+        // settled fairly — void it rather than force a loss.
+        if (htHome === null || htHome === undefined) return null;
+        if (htAway === null || htAway === undefined) return null;
         if (selection === '1') return htHome > htAway;
         if (selection === 'X') return htHome === htAway;
         if (selection === '2') return htAway > htHome;

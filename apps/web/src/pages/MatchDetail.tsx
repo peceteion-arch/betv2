@@ -13,7 +13,6 @@ const MARKET_LABELS: Record<string, string> = {
   'MARCAS_3_5': 'Golos O/U 3.5',
   'MARCAS_4_5': 'Golos O/U 4.5',
   'AMBAS_MARCAM': 'Ambas Marcam',
-  'RESULTADO_INTERVALO': 'Resultado Intervalo',
   'RESULTADO_CORRETO': 'Resultado Correto',
   'HANDICAP_n1_5': 'Handicap -1.5',
   'HANDICAP_n0_5': 'Handicap -0.5',
@@ -49,7 +48,7 @@ export default function MatchDetail() {
   const { id } = useParams();
   const [match, setMatch] = useState<MatchData | null>(null);
   const [loading, setLoading] = useState(true);
-  const { addSelection, removeSelection, selections } = useBetSlip();
+  const { addSelection, removeSelection, selections, stake, totalOdds, setSheetOpen } = useBetSlip();
 
   useEffect(() => {
     if (id) {
@@ -80,10 +79,32 @@ export default function MatchDetail() {
     return acc;
   }, {});
 
+  // Declared before the loading / !match early returns below, so the button
+  // still renders while the match is being fetched. This page hides the
+  // bottom nav, so the button sits at the bottom of the viewport and opens
+  // the same shared sheet as Layout.
+  const mobileBilhete = selections.length > 0 ? (
+    <div className="lg:hidden">
+      {/* Spacer so the fixed button never covers the last market */}
+      <div className="h-20" />
+      <button
+        onClick={() => setSheetOpen(true)}
+        aria-label={`Abrir bilhete com ${selections.length} seleções`}
+        className="fixed left-0 right-0 bottom-0 z-40 mx-4 bg-neon-green text-black font-black rounded-2xl px-4 py-4 shadow-2xl flex items-center justify-center gap-2 animate-slide-up active:scale-95 transition-all"
+        style={{ marginBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
+      >
+        🎟️ Ver Bilhete
+        <span>{selections.length}</span>
+        <span className="text-sm">· {(stake * totalOdds()).toFixed(0)} CR</span>
+      </button>
+    </div>
+  ) : null;
+
   if (loading) {
     return (
       <div className="text-center py-16">
         <div className="inline-block w-8 h-8 border-2 border-neon-green border-t-transparent rounded-full animate-spin" />
+        {mobileBilhete}
       </div>
     );
   }
@@ -93,12 +114,15 @@ export default function MatchDetail() {
       <div className="text-center py-16">
         <p className="text-gray-500">Jogo não encontrado</p>
         <Link to="/matches" className="btn-neon text-sm mt-4 inline-block">Voltar</Link>
+        {mobileBilhete}
       </div>
     );
   }
 
   return (
     <div className="space-y-3">
+      {mobileBilhete}
+
       {/* Back button */}
       <Link to="/matches" className="text-neon-blue text-sm flex items-center gap-1">
         ← Voltar
@@ -195,8 +219,6 @@ export default function MatchDetail() {
               let label = odd.selection;
               if (market === '1X2') {
                 label = odd.selection === '1' ? match.homeTeam : odd.selection === 'X' ? 'Empate' : match.awayTeam;
-              } else if (market === 'RESULTADO_INTERVALO') {
-                label = odd.selection === '1' ? match.homeTeam.slice(0, 10) : odd.selection === 'X' ? 'Empate' : match.awayTeam.slice(0, 10);
               }
               return (
                 <button
@@ -215,7 +237,7 @@ export default function MatchDetail() {
                     {label}
                   </p>
                   <p className={`text-xs font-bold ${sel ? 'text-black' : canBet ? 'text-white' : 'text-gray-500'}`}>
-                    {odd.value.toFixed(2)}
+                    {Number(odd.value).toFixed(2)}
                   </p>
                 </button>
               );

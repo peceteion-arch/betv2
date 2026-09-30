@@ -32,15 +32,38 @@ interface AdminStats {
   totalLost: number;
 }
 
+interface AdminMatch {
+  id: string;
+  homeTeam: string;
+  awayTeam: string;
+  league: string;
+  matchDate: string;
+  status: string;
+  homeScore: number | null;
+  awayScore: number | null;
+  country: string;
+  odds: any[];
+}
+
 export default function Admin() {
   const { user } = useAuth();
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [groups, setGroups] = useState<AdminGroup[]>([]);
-  const [tab, setTab] = useState<'stats' | 'users' | 'groups' | 'sync'>('stats');
+  const [tab, setTab] = useState<'stats' | 'users' | 'groups' | 'sync' | 'meciuri'>('stats');
   const [showCreateUser, setShowCreateUser] = useState(false);
   const [newUser, setNewUser] = useState({ name: '', email: '', password: '', balance: 100 });
   const [error, setError] = useState('');
+  const [matches, setMatches] = useState<AdminMatch[]>([]);
+  const [matchForm, setMatchForm] = useState({
+    homeTeam: '', awayTeam: '',
+    league: 'Minifotbal', matchDate: ''
+  });
+  const [scoreEdit, setScoreEdit] = useState<{
+    matchId: string; homeScore: string; awayScore: string
+  } | null>(null);
+  const [matchError, setMatchError] = useState('');
+  const [matchLoading, setMatchLoading] = useState(false);
 
   useEffect(() => {
     if (user?.role !== 'ADMIN') return;
@@ -48,6 +71,11 @@ export default function Admin() {
     api.get('/admin/users').then((r) => setUsers(r.data.users));
     api.get('/admin/groups').then((r) => setGroups(r.data));
   }, [user]);
+
+  useEffect(() => {
+    if (user?.role !== 'ADMIN' || tab !== 'meciuri') return;
+    api.get('/matches/all').then((r) => setMatches(r.data));
+  }, [user, tab]);
 
   if (user?.role !== 'ADMIN') {
     return <div className="text-center py-16 text-neon-red">Acesso negado</div>;
@@ -106,12 +134,57 @@ export default function Admin() {
     alert(r.data.message);
   };
 
+  const handleCreateMatch = async () => {
+    setMatchError('');
+    setMatchLoading(true);
+    try {
+      const r = await api.post('/matches/manual', matchForm);
+      setMatches((prev) => [r.data, ...prev]);
+      setMatchForm({ homeTeam: '', awayTeam: '', league: 'Minifotbal', matchDate: '' });
+    } catch (err: any) {
+      setMatchError(err.response?.data?.error || 'Erro ao criar jogo');
+    } finally {
+      setMatchLoading(false);
+    }
+  };
+
+  const handleUpdateScore = async () => {
+    if (!scoreEdit) return;
+    setMatchError('');
+    try {
+      const r = await api.patch(`/matches/${scoreEdit.matchId}/score`, {
+        homeScore: Number(scoreEdit.homeScore),
+        awayScore: Number(scoreEdit.awayScore),
+        status: 'FINISHED',
+      });
+      setMatches((prev) => prev.map((m) => (m.id === scoreEdit.matchId ? r.data : m)));
+      setScoreEdit(null);
+    } catch (err: any) {
+      setMatchError(err.response?.data?.error || 'Erro ao atualizar resultado');
+    }
+  };
+
+  const handleDeleteMatch = async (matchId: string) => {
+    if (!confirm('Eliminar jogo?')) return;
+    try {
+      await api.delete(`/matches/${matchId}`);
+      setMatches((prev) => prev.filter((m) => m.id !== matchId));
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Erro ao eliminar jogo');
+    }
+  };
+
+  const handleSettle = async () => {
+    await api.post('/bets/settle');
+    alert('Settlement executat!');
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       <h1 className="text-2xl font-black">Painel de Administração</h1>
 
       <div className="flex gap-2">
-        {(['stats', 'users', 'groups', 'sync'] as const).map((t) => (
+        {(['stats', 'users', 'groups', 'sync', 'meciuri'] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -119,7 +192,7 @@ export default function Admin() {
               tab === t ? 'bg-neon-green text-black' : 'bg-bet-700 text-gray-400 hover:text-white'
             }`}
           >
-            {t === 'stats' ? 'Estatísticas' : t === 'users' ? 'Utilizadores' : t === 'groups' ? 'Grupos' : 'Sincronizar'}
+            {t === 'stats' ? 'Estatísticas' : t === 'users' ? 'Utilizadores' : t === 'groups' ? 'Grupos' : t === 'meciuri' ? 'Meciuri' : 'Sincronizar'}
           </button>
         ))}
       </div>
@@ -239,6 +312,138 @@ export default function Admin() {
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {tab === 'meciuri' && (
+        <div className="space-y-4">
+          <div className="card-bet p-5 space-y-4">
+            <h3 className="font-bold text-sm">Adicionar Jogo Manual</h3>
+            {matchError && <p className="text-neon-red text-sm">{matchError}</p>}
+            <div className="grid grid-cols-2 gap-3">
+              <input
+                className="input-bet"
+                placeholder="Casa (ex: FC Nando)"
+                value={matchForm.homeTeam}
+                onChange={(e) => setMatchForm({ ...matchForm, homeTeam: e.target.value })}
+              />
+              <input
+                className="input-bet"
+                placeholder="Fora (ex: Sporting Galați)"
+                value={matchForm.awayTeam}
+                onChange={(e) => setMatchForm({ ...matchForm, awayTeam: e.target.value })}
+              />
+              <input
+                className="input-bet"
+                placeholder="Liga"
+                value={matchForm.league}
+                onChange={(e) => setMatchForm({ ...matchForm, league: e.target.value })}
+              />
+              <input
+                className="input-bet"
+                type="datetime-local"
+                value={matchForm.matchDate}
+                onChange={(e) => setMatchForm({ ...matchForm, matchDate: e.target.value })}
+              />
+            </div>
+            <div className="flex gap-2">
+              <button onClick={handleCreateMatch} disabled={matchLoading} className="btn-neon-solid text-sm">
+                {matchLoading ? 'A criar...' : '+ Criar Jogo'}
+              </button>
+              <button onClick={handleSettle} className="btn-neon text-sm">
+                ⚡ Liquidar Apostas
+              </button>
+            </div>
+          </div>
+
+          <div className="card-bet overflow-hidden">
+            <table className="w-full">
+              <thead>
+                <tr className="border-b border-bet-600/50">
+                  <th className="text-left p-3 text-[10px] uppercase text-gray-500">Jogo</th>
+                  <th className="text-left p-3 text-[10px] uppercase text-gray-500">Liga</th>
+                  <th className="text-left p-3 text-[10px] uppercase text-gray-500">Data</th>
+                  <th className="text-left p-3 text-[10px] uppercase text-gray-500">Status</th>
+                  <th className="text-center p-3 text-[10px] uppercase text-gray-500">Resultado</th>
+                  <th className="text-right p-3 text-[10px] uppercase text-gray-500">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {matches.map((match) => (
+                  <tr key={match.id} className="border-b border-bet-700 hover:bg-bet-700/50">
+                    <td className="p-3 text-sm">
+                      {match.homeTeam} vs {match.awayTeam}
+                      {match.country === 'Manual' && (
+                        <span className="text-[9px] bg-neon-blue/20 text-neon-blue px-1 rounded ml-1">MANUAL</span>
+                      )}
+                    </td>
+                    <td className="p-3 text-xs text-gray-400">{match.league}</td>
+                    <td className="p-3 text-xs text-gray-400">{new Date(match.matchDate).toLocaleString('pt-PT')}</td>
+                    <td className="p-3">
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] ${
+                          match.status === 'SCHEDULED'
+                            ? 'bg-neon-yellow/20 text-neon-yellow'
+                            : match.status === 'LIVE'
+                              ? 'bg-neon-green/20 text-neon-green animate-pulse'
+                              : 'bg-bet-600 text-gray-400'
+                        }`}
+                      >
+                        {match.status}
+                      </span>
+                    </td>
+                    <td className="p-3 text-center text-sm font-bold">
+                      {scoreEdit?.matchId === match.id ? (
+                        <div className="flex gap-1 items-center justify-center">
+                          <input
+                            className="input-bet w-14 text-center text-sm"
+                            type="number"
+                            min={0}
+                            placeholder="0"
+                            value={scoreEdit.homeScore}
+                            onChange={(e) => setScoreEdit({ ...scoreEdit, homeScore: e.target.value })}
+                          />
+                          <span className="text-gray-400">-</span>
+                          <input
+                            className="input-bet w-14 text-center text-sm"
+                            type="number"
+                            min={0}
+                            placeholder="0"
+                            value={scoreEdit.awayScore}
+                            onChange={(e) => setScoreEdit({ ...scoreEdit, awayScore: e.target.value })}
+                          />
+                          <button onClick={handleUpdateScore} className="btn-neon-solid text-xs px-2">✓</button>
+                          <button onClick={() => setScoreEdit(null)} className="text-gray-400 text-xs px-2">✕</button>
+                        </div>
+                      ) : match.homeScore !== null ? (
+                        `${match.homeScore} - ${match.awayScore}`
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                    <td className="p-3">
+                      <div className="flex gap-2 justify-end">
+                        <button
+                          onClick={() => setScoreEdit({ matchId: match.id, homeScore: '', awayScore: '' })}
+                          className="text-[10px] text-neon-yellow hover:underline"
+                        >
+                          Resultado
+                        </button>
+                        {match.country === 'Manual' && (
+                          <button
+                            onClick={() => handleDeleteMatch(match.id)}
+                            className="text-[10px] text-neon-red hover:underline"
+                          >
+                            Eliminar
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

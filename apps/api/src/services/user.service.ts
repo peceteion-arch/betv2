@@ -75,8 +75,10 @@ export const userService = {
     return { ...user, balance: Number(user.balance) };
   },
 
-  async updateStats(userId: string, won: boolean, profit: number, stake?: number) {
-    const user = await prisma.user.findUnique({ where: { id: userId } });
+  async updateStats(userId: string, won: boolean, profit: number, stake?: number, tx?: Prisma.TransactionClient) {
+    const client = tx ?? prisma;
+
+    const user = await client.user.findUnique({ where: { id: userId } });
     if (!user) throw new Error('Utilizador não encontrado');
 
     const newBetsCount = user.betsCount + 1;
@@ -84,18 +86,19 @@ export const userService = {
     const currentProfit = Number(user.profit);
     const newProfit = currentProfit + profit;
 
-    let totalStaked = 0;
-    if (stake) {
-      const aggregated = await prisma.bet.aggregate({
-        where: { userId, status: { in: ['WON', 'LOST'] } },
-        _sum: { stake: true },
-      });
-      totalStaked = Number(aggregated._sum.stake || 0) + stake;
-    }
+    const aggregated = await client.bet.aggregate({
+      where: { userId, status: { in: ['WON', 'LOST'] } },
+      _sum: { stake: true },
+    });
+    // Inside the settlement transaction the bet has already been flipped to
+    // WON/LOST, so the aggregate already contains its stake — adding `stake`
+    // on top would double-count it and halve the ROI.
+    let totalStaked = Number(aggregated._sum.stake || 0);
+    if (stake && !tx) totalStaked += stake;
 
     const newRoi = totalStaked > 0 ? (newProfit / totalStaked) * 100 : 0;
 
-    return prisma.user.update({
+    return client.user.update({
       where: { id: userId },
       data: {
         betsCount: newBetsCount,

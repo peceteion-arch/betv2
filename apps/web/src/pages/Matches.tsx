@@ -196,7 +196,7 @@ export default function Matches() {
                         {label}
                       </p>
                       <p className={`text-xs font-bold ${sel ? 'text-black' : bettable ? 'text-white' : 'text-gray-500'}`}>
-                        {odd.value.toFixed(2)}
+                        {Number(odd.value).toFixed(2)}
                       </p>
                     </button>
                   );

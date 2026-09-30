@@ -6,6 +6,14 @@ import { join } from 'path';
 
 const FOOTBALL_DATA_BASE = 'https://api.football-data.org/v4';
 
+// Odds.value is @db.Decimal, so Prisma hands it back as a Decimal that
+// serialises to a JSON string ("1.90"). The UI calls .toFixed() on it, which
+// only exists on numbers, so every match read has to be normalised before it
+// leaves the API. listAll() in particular feeds the admin table, which reads
+// the same field.
+const mapOdds = (odds: any[]) =>
+  odds.map((o) => ({ ...o, value: Number(o.value) }));
+
 export interface FootballMatch {
   externalId: string;
   homeTeam: string;
@@ -124,7 +132,9 @@ export const matchService = {
 
   async listUpcoming(limit: number = 20, cursor?: string) {
     const now = new Date();
-    const query: Prisma.MatchFindManyArgs = {
+    // Typed with its return type rather than Prisma.MatchFindManyArgs so the
+    // `include` survives inference and `odds` is visible on each match.
+    const query: Prisma.MatchFindManyArgs & { include: { odds: true } } = {
       where: {
         matchDate: { gte: now },
         status: 'SCHEDULED',
@@ -141,7 +151,10 @@ export const matchService = {
 
     const matches = await prisma.match.findMany(query);
     const hasMore = matches.length > limit;
-    const items = hasMore ? matches.slice(0, limit) : matches;
+    const items = (hasMore ? matches.slice(0, limit) : matches).map((m) => ({
+      ...m,
+      odds: mapOdds(m.odds),
+    }));
 
     return {
       items,
@@ -151,7 +164,7 @@ export const matchService = {
 
   async listLive(limit: number = 50) {
     const now = new Date();
-    return prisma.match.findMany({
+    const matches = await prisma.match.findMany({
       where: {
         OR: [
           { status: 'LIVE' },
@@ -162,6 +175,7 @@ export const matchService = {
       orderBy: { matchDate: 'desc' },
       take: limit,
     });
+    return matches.map((m) => ({ ...m, odds: mapOdds(m.odds) }));
   },
 
   async getById(id: string) {
@@ -170,7 +184,73 @@ export const matchService = {
       include: { odds: true },
     });
     if (!match) throw new Error('Match not found');
-    return match;
+    return { ...match, odds: mapOdds(match.odds) };
+  },
+
+  // Admin panel listing: every match regardless of status, no pagination.
+  async listAll() {
+    const matches = await prisma.match.findMany({
+      include: { odds: true },
+      orderBy: { matchDate: 'desc' },
+    });
+    return matches.map((m) => ({ ...m, odds: mapOdds(m.odds) }));
+  },
+
+  async createManual(data: {
+    homeTeam: string;
+    awayTeam: string;
+    league: string;
+    matchDate: string;
+  }) {
+    // Timestamp suffix keeps externalId unique so the same pairing can be
+    // scheduled twice on different dates.
+    const slug = (s: string) => s.toLowerCase().replace(/\s+/g, '-');
+    const externalId = `manual-${slug(data.homeTeam)}-${slug(data.awayTeam)}-${Date.now()}`;
+
+    const newMatch = await prisma.match.create({
+      data: {
+        homeTeam: data.homeTeam,
+        awayTeam: data.awayTeam,
+        league: data.league,
+        country: 'Manual',
+        matchDate: new Date(data.matchDate),
+        status: 'SCHEDULED',
+        externalId,
+        homeCrest: null,
+        awayCrest: null,
+      },
+    });
+
+    await this.generateOdds(newMatch.id);
+
+    const created = await prisma.match.findUnique({
+      where: { id: newMatch.id },
+      include: { odds: true },
+    });
+    return created && { ...created, odds: mapOdds(created.odds) };
+  },
+
+  async updateScore(id: string, data: { homeScore: number; awayScore: number; status: string }) {
+    await prisma.match.update({
+      where: { id },
+      data: { homeScore: data.homeScore, awayScore: data.awayScore, status: data.status },
+    });
+
+    const updated = await prisma.match.findUnique({
+      where: { id },
+      include: { odds: true },
+    });
+    return updated && { ...updated, odds: mapOdds(updated.odds) };
+  },
+
+  // Refuses to delete a match that already has bets on it, so settled history
+  // can never be orphaned. Returns the bet count so the route can report 409.
+  async deleteMatch(id: string) {
+    const bets = await prisma.betSelection.count({ where: { matchId: id } });
+    if (bets > 0) return { deleted: false as const, bets };
+
+    await prisma.match.delete({ where: { id } });
+    return { deleted: true as const, bets: 0 };
   },
 
   async generateOdds(matchId: string) {
@@ -188,7 +268,6 @@ export const matchService = {
       { market: 'MARCAS_3_5', selections: ['Mais 3.5', 'Menos 3.5'] },
       { market: 'MARCAS_4_5', selections: ['Mais 4.5', 'Menos 4.5'] },
       { market: 'AMBAS_MARCAM', selections: ['Sim', 'Não'] },
-      { market: 'RESULTADO_INTERVALO', selections: ['1', 'X', '2'] },
       { market: 'RESULTADO_CORRETO', selections: ['1-0', '2-0', '2-1', '0-0', '1-1', '2-2', '0-1', '0-2', '1-2'] },
       { market: 'IMPAR_PAR', selections: ['Ímpar', 'Par'] },
     ];
@@ -202,7 +281,6 @@ export const matchService = {
       'MARCAS_3_5': [2.60, 1.50],
       'MARCAS_4_5': [3.40, 1.30],
       'AMBAS_MARCAM': [1.75, 2.05],
-      'RESULTADO_INTERVALO': [2.80, 2.20, 3.60],
       'RESULTADO_CORRETO': [5.50, 7.00, 8.50, 9.00, 5.80, 12.00, 6.50, 8.00, 9.50],
       'IMPAR_PAR': [1.90, 1.90],
     };

@@ -3,7 +3,15 @@ import { useAuth } from '../lib/auth';
 import api from '../lib/api';
 import { useState } from 'react';
 
-export default function BetSlip() {
+interface BetSlipInlineProps {
+  onSuccess?: () => void;
+}
+
+// Mobile counterpart of BetSlip: same betting logic, but without the
+// card/sticky wrapper so it can live inside a bottom sheet. It also drops the
+// empty state — the floating button that opens the sheet only renders when
+// there is at least one selection, so "no selections" is unreachable here.
+export default function BetSlipInline({ onSuccess }: BetSlipInlineProps) {
   const { selections, stake, setStake, totalOdds, clear, removeSelection } = useBetSlip();
   const { user, refreshUser } = useAuth();
   const [loading, setLoading] = useState(false);
@@ -28,6 +36,9 @@ export default function BetSlip() {
       refreshUser();
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
+      // Let the caller close the sheet, but only after the success flash has
+      // been on screen briefly — closing instantly would hide the feedback.
+      setTimeout(() => onSuccess?.(), 600);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Erro ao colocar aposta');
     } finally {
@@ -35,33 +46,9 @@ export default function BetSlip() {
     }
   };
 
-  if (selections.length === 0) {
-    return (
-      <div className="card-bet p-5 sticky top-20">
-        <div className="text-center py-8">
-          <div className="text-4xl mb-3">🎟️</div>
-          <p className="text-gray-500 text-sm">O teu bilhete</p>
-          <p className="text-gray-600 text-xs mt-1">Clica nas odds para adicionar</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="card-bet-glow p-5 sticky top-20 animate-slide-up">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="font-bold text-sm uppercase tracking-wider">
-          Bilhete
-          <span className="ml-2 bg-neon-green text-black text-[10px] font-bold px-2 py-0.5 rounded-full">
-            {selections.length}
-          </span>
-        </h3>
-        <button onClick={clear} className="text-gray-500 hover:text-neon-red text-xs transition-colors">
-          Limpar
-        </button>
-      </div>
-
-      <div className="space-y-2 mb-4">
+    <div className="space-y-4">
+      <div className="space-y-2">
         {selections.map((s, i) => (
           <div key={i} className="bg-bet-700 rounded-lg p-3 relative group">
             <button
@@ -84,7 +71,7 @@ export default function BetSlip() {
         ))}
       </div>
 
-      <div className="border-t border-bet-600 pt-4 space-y-3">
+      <div className="space-y-3">
         <div>
           <label className="text-[10px] text-gray-500 uppercase tracking-wider">Valor</label>
           <div className="flex gap-2 mt-1">

@@ -12,9 +12,13 @@ interface BetSelection {
 interface BetSlipStore {
   selections: BetSelection[];
   stake: number;
+  // Mobile bottom sheet visibility. Lives here rather than in Layout so pages
+  // without a bottom nav (match detail) can open the same sheet.
+  sheetOpen: boolean;
   addSelection: (selection: BetSelection) => void;
   removeSelection: (matchId: string, market: string) => void;
   setStake: (stake: number) => void;
+  setSheetOpen: (open: boolean) => void;
   clear: () => void;
   totalOdds: () => number;
 }
@@ -22,6 +26,7 @@ interface BetSlipStore {
 export const useBetSlip = create<BetSlipStore>((set, get) => ({
   selections: [],
   stake: 10,
+  sheetOpen: false,
 
   addSelection: (selection) => {
     set((state) => {
@@ -51,7 +56,9 @@ export const useBetSlip = create<BetSlipStore>((set, get) => ({
 
   setStake: (stake) => set({ stake }),
 
-  clear: () => set({ selections: [], stake: 10 }),
+  setSheetOpen: (sheetOpen) => set({ sheetOpen }),
+
+  clear: () => set({ selections: [], stake: 10, sheetOpen: false }),
 
   totalOdds: () => {
     const { selections } = get();
