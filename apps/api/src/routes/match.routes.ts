@@ -61,6 +61,29 @@ router.patch('/:id/score', authenticate, requireAdmin, validate(updateScoreSchem
   }
 });
 
+// VOID is kept on its own route rather than folded into /:id/score: a void
+// means "this event produced no playable result", which is a different act
+// from recording a result. It must never invent a 0-0 score.
+router.patch('/:id/void', authenticate, requireAdmin, async (req: AuthRequest, res) => {
+  try {
+    const match = await matchService.voidMatch(req.params.id);
+    res.json(match);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Erro ao marcar jogo como VOID';
+    res.status(400).json({ error: message });
+  }
+});
+
+router.patch('/:id/unvoid', authenticate, requireAdmin, async (req: AuthRequest, res) => {
+  try {
+    const match = await matchService.unvoidMatch(req.params.id);
+    res.json(match);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Erro ao anular marcação VOID';
+    res.status(400).json({ error: message });
+  }
+});
+
 router.delete('/:id', authenticate, requireAdmin, async (req: AuthRequest, res) => {
   try {
     const result = await matchService.deleteMatch(req.params.id);

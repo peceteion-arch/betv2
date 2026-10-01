@@ -179,6 +179,29 @@ export default function Admin() {
     alert('Settlement executat!');
   };
 
+  // VOID means "this event produced no playable result". Its legs drop out of
+  // any accumulator at odds 1.00; it is not a 0-0 result and does not cancel
+  // the tickets that referenced it.
+  const handleVoidMatch = async (matchId: string) => {
+    if (!confirm('Marchas este jogo como VOID?\n\nAs seleções deste jogo passam a contar com cota 1.00 nos bilhetes. O jogo não fica com resultado 0-0.')) return;
+    try {
+      const r = await api.patch(`/matches/${matchId}/void`);
+      setMatches((prev) => prev.map((m) => (m.id === matchId ? r.data : m)));
+    } catch (err: any) {
+      setMatchError(err.response?.data?.error || 'Erro ao marcar jogo como VOID');
+    }
+  };
+
+  const handleUnvoidMatch = async (matchId: string) => {
+    if (!confirm('Anular a marcação VOID deste jogo?')) return;
+    try {
+      const r = await api.patch(`/matches/${matchId}/unvoid`);
+      setMatches((prev) => prev.map((m) => (m.id === matchId ? r.data : m)));
+    } catch (err: any) {
+      setMatchError(err.response?.data?.error || 'Erro ao anular marcação VOID');
+    }
+  };
+
   return (
     <div className="space-y-6 animate-fade-in">
       <h1 className="text-2xl font-black">Painel de Administração</h1>
@@ -382,18 +405,22 @@ export default function Admin() {
                     <td className="p-3">
                       <span
                         className={`px-2 py-0.5 rounded text-[10px] ${
-                          match.status === 'SCHEDULED'
-                            ? 'bg-neon-yellow/20 text-neon-yellow'
-                            : match.status === 'LIVE'
-                              ? 'bg-neon-green/20 text-neon-green animate-pulse'
-                              : 'bg-bet-600 text-gray-400'
+                          match.status === 'VOID'
+                            ? 'bg-neon-blue/20 text-neon-blue'
+                            : match.status === 'SCHEDULED'
+                              ? 'bg-neon-yellow/20 text-neon-yellow'
+                              : match.status === 'LIVE'
+                                ? 'bg-neon-green/20 text-neon-green animate-pulse'
+                                : 'bg-bet-600 text-gray-400'
                         }`}
                       >
                         {match.status}
                       </span>
                     </td>
                     <td className="p-3 text-center text-sm font-bold">
-                      {scoreEdit?.matchId === match.id ? (
+                      {match.status === 'VOID' ? (
+                        <span className="text-neon-blue text-xs">VOID</span>
+                      ) : scoreEdit?.matchId === match.id ? (
                         <div className="flex gap-1 items-center justify-center">
                           <input
                             className="input-bet w-14 text-center text-sm"
@@ -423,12 +450,32 @@ export default function Admin() {
                     </td>
                     <td className="p-3">
                       <div className="flex gap-2 justify-end">
-                        <button
-                          onClick={() => setScoreEdit({ matchId: match.id, homeScore: '', awayScore: '' })}
-                          className="text-[10px] text-neon-yellow hover:underline"
-                        >
-                          Resultado
-                        </button>
+                        {match.status === 'VOID' ? (
+                          <>
+                            <span className="text-[10px] text-neon-blue self-center">VOID</span>
+                            <button
+                              onClick={() => handleUnvoidMatch(match.id)}
+                              className="text-[10px] text-neon-yellow hover:underline"
+                            >
+                              Anular VOID
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => setScoreEdit({ matchId: match.id, homeScore: '', awayScore: '' })}
+                              className="text-[10px] text-neon-yellow hover:underline"
+                            >
+                              Resultado
+                            </button>
+                            <button
+                              onClick={() => handleVoidMatch(match.id)}
+                              className="text-[10px] text-neon-blue hover:underline"
+                            >
+                              Marcar VOID
+                            </button>
+                          </>
+                        )}
                         {match.country === 'Manual' && (
                           <button
                             onClick={() => handleDeleteMatch(match.id)}

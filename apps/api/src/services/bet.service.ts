@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { notificationService } from './notification.service';
 import { userService } from './user.service';
+import { evaluateBet, describeVoids, VOID_MATCH_STATUSES } from '../lib/settlement';
 import { Prisma } from '@prisma/client';
 
 // stake/totalOdds/potentialReturn and BetSelection.odds are @db.Decimal, so
@@ -15,6 +16,8 @@ const mapBet = (bet: any) => ({
     selections: bet.selections.map((s: any) => ({ ...s, odds: Number(s.odds) })),
   }),
 });
+
+const round2 = (n: number) => Math.round(n * 100) / 100;
 
 export const betService = {
   async placeBet(userId: string, stake: number, selections: Array<{
@@ -56,8 +59,13 @@ export const betService = {
       seen.add(key);
     }
 
-    const totalOdds = lockedSelections.reduce((acc, s) => acc * s.odds, 1);
-    const potentialReturn = stake * totalOdds;
+    // Round the combined odds BEFORE deriving the payout, so the ticket
+    // satisfies stake * totalOdds === potentialReturn at stored precision.
+    // The previous order (raw totalOdds -> payout, then round both) left the
+    // two fields inconsistent: stake 100 on legs [1.955, 1.871] stored
+    // totalOdds 3.66 but potentialReturn 365.78 instead of 366.00.
+    const totalOdds = round2(lockedSelections.reduce((acc, s) => acc * s.odds, 1));
+    const potentialReturn = round2(stake * totalOdds);
 
     const bet = await prisma.$transaction(async (tx) => {
       const user = await tx.user.findUnique({ where: { id: userId } });
@@ -75,8 +83,8 @@ export const betService = {
         data: {
           userId,
           stake,
-          totalOdds: Math.round(totalOdds * 100) / 100,
-          potentialReturn: Math.round(potentialReturn * 100) / 100,
+          totalOdds,
+          potentialReturn,
           selections: {
             create: lockedSelections.map((s) => ({
               matchId: s.matchId,
@@ -146,208 +154,177 @@ export const betService = {
       if (bet.userId !== userId) throw new Error('Not your bet');
       if (bet.status !== 'PENDING') throw new Error('Can only cancel pending bets');
 
+      // Claim the ticket with a status-guarded UPDATE before refunding. The
+      // old code did the refund first and then a bare `update({where: {id}})`,
+      // so a settlement that committed in between would be overwritten —
+      // the user would receive both the payout and the refund. updateMany
+      // re-evaluates the WHERE under the row lock, so exactly one of the two
+      // racers sees count === 1 and only that one refunds.
+      const claimed = await tx.bet.updateMany({
+        where: { id: betId, status: 'PENDING' },
+        data: { status: 'CANCELLED', settledAt: new Date() },
+      });
+      if (claimed.count !== 1) throw new Error('Can only cancel pending bets');
+
       await tx.user.update({
         where: { id: userId },
         data: { balance: { increment: bet.stake } },
       });
 
-      return tx.bet.update({
-        where: { id: betId },
-        data: { status: 'CANCELLED' },
-      });
+      return tx.bet.findUnique({ where: { id: betId } });
     });
 
+    if (!result) throw new Error('Bet not found');
     return mapBet(result);
   },
+  // Settles every PENDING ticket, one short transaction per ticket.
+  //
+  // The previous version opened a single transaction spanning the whole loop.
+  // Prisma's interactive transaction times out after 5s by default, so a run
+  // that touched more than a few hundred bets rolled back everything and
+  // nothing was ever settled. Per-bet transactions keep each unit of work
+  // short while preserving the invariant that matters: within one ticket, the
+  // status flip, the selection flags, the balance and the stats all commit or
+  // none do.
   async settlePendingBets() {
-    await prisma.$transaction(async (tx) => {
-      const pendingBets = await tx.bet.findMany({
-        where: { status: 'PENDING' },
-        include: {
-          selections: { include: { match: true } },
-          user: true,
+    const pendingBets = await prisma.bet.findMany({
+      where: { status: 'PENDING' },
+      // Stable order so two concurrent runs touch tickets in the same sequence,
+      // which is what keeps them from deadlocking on each other's row locks.
+      orderBy: { id: 'asc' },
+      select: {
+        id: true,
+        userId: true,
+        stake: true,
+        selections: {
+          include: {
+            match: {
+              select: {
+                status: true,
+                homeScore: true,
+                awayScore: true,
+                halfTimeHome: true,
+                halfTimeAway: true,
+              },
+            },
+          },
         },
-      });
-
-      for (const bet of pendingBets) {
-        let anyLost = false;
-        let anyVoid = false;
-        let allFinished = true;
-
-        for (const selection of bet.selections) {
-          const match = selection.match;
-
-          if (match.status === 'POSTPONED' || match.status === 'CANCELLED') {
-            anyVoid = true;
-            await tx.betSelection.update({
-              where: { id: selection.id },
-              data: { won: null },
-            });
-            continue;
-          }
-
-          if (match.status !== 'FINISHED') {
-            allFinished = false;
-            continue;
-          }
-
-          const won = this.checkSelectionWon(selection.market, selection.selection, match);
-
-          if (won === null) {
-            anyVoid = true;
-            await tx.betSelection.update({
-              where: { id: selection.id },
-              data: { won: null },
-            });
-            continue;
-          }
-
-          await tx.betSelection.update({
-            where: { id: selection.id },
-            data: { won },
-          });
-
-          if (!won) {
-            anyLost = true;
-          }
-        }
-
-        if (anyLost) {
-          const lost = await tx.bet.updateMany({
-            where: { id: bet.id, status: 'PENDING' },
-            data: { status: 'LOST', settledAt: new Date() },
-          });
-          if (lost.count !== 1) continue;
-
-          await userService.updateStats(bet.userId, false, -Number(bet.stake), Number(bet.stake), tx);
-          await notificationService.create(bet.userId, 'BET_LOST', `Perdeste ${Number(bet.stake).toFixed(2)} créditos - multipla perdida`, tx);
-          continue;
-        }
-
-        if (!allFinished) continue;
-
-        if (anyVoid) {
-          const cancelled = await tx.bet.updateMany({
-            where: { id: bet.id, status: 'PENDING' },
-            data: { status: 'CANCELLED', settledAt: new Date() },
-          });
-          if (cancelled.count !== 1) continue;
-
-          await tx.user.update({
-            where: { id: bet.userId },
-            data: { balance: { increment: bet.stake } },
-          });
-          await notificationService.create(bet.userId, 'BET_CANCELLED', `Aposta anulada - push/void. ${Number(bet.stake).toFixed(2)} créditos devolvidos`, tx);
-          continue;
-        }
-
-        const profit = Number(bet.potentialReturn) - Number(bet.stake);
-        const won = await tx.bet.updateMany({
-          where: { id: bet.id, status: 'PENDING' },
-          data: { status: 'WON', settledAt: new Date() },
-        });
-        if (won.count !== 1) continue;
-
-        await tx.user.update({
-          where: { id: bet.userId },
-          data: { balance: { increment: bet.potentialReturn } },
-        });
-        await userService.updateStats(bet.userId, true, profit, Number(bet.stake), tx);
-        await notificationService.create(bet.userId, 'BET_WON', `Ganhaste ${Number(bet.potentialReturn).toFixed(2)} créditos!`, tx);
-      }
+      },
     });
+
+    for (const bet of pendingBets) {
+      try {
+        await this.settleBet(bet);
+      } catch (error) {
+        // One bad ticket must not stop the run. Its own transaction has
+        // already rolled back, so it simply stays PENDING for the next run.
+        console.error(`Failed to settle bet ${bet.id}:`, error);
+      }
+    }
+
+    return pendingBets.length;
   },
 
-  checkSelectionWon(market: string, selection: string, match: {
-    homeScore: number | null;
-    awayScore: number | null;
-    halfTimeHome: number | null;
-    halfTimeAway: number | null;
-  }): boolean | null {
-    if (match.homeScore === null || match.homeScore === undefined) return false;
-    if (match.awayScore === null || match.awayScore === undefined) return false;
 
-    const home = match.homeScore;
-    const away = match.awayScore;
-    const total = home + away;
-    const htHome = match.halfTimeHome;
-    const htAway = match.halfTimeAway;
+  // Settles one ticket inside a single transaction: the selection flags, the
+  // status flip, the balance movement and the stats either all commit or none
+  // do. The old code spread a single settlement across one transaction holding
+  // every ticket at once, which Prisma's 5s interactive-transaction timeout
+  // would roll back wholesale; per-ticket transactions stay short while making
+  // the ticket itself atomic.
+  async settleBet(bet: {
+    id: string;
+    userId: string;
+    stake: Prisma.Decimal;
+    selections: Array<{
+      id: string;
+      market: string;
+      selection: string;
+      odds: Prisma.Decimal;
+      match: { status: string; homeScore: number | null; awayScore: number | null; halfTimeHome: number | null; halfTimeAway: number | null };
+    }>;
+  }) {
+    const stake = Number(bet.stake);
 
-    switch (market) {
-      case '1X2':
-        if (selection === '1') return home > away;
-        if (selection === 'X') return home === away;
-        if (selection === '2') return away > home;
-        return false;
+    // A match that has not finished yet, or that finished without its result
+    // being recorded, is NOT a void — it is simply not ready. The ticket stays
+    // PENDING and is re-evaluated on the next settlement run.
+    const allDecided = bet.selections.every(
+      (s) => s.match.status === 'FINISHED' || VOID_MATCH_STATUSES.includes(s.match.status)
+    );
+    if (!allDecided) return;
 
-      case 'DUPLA_HIPOTESE':
-        if (selection === '1X') return home >= away;
-        if (selection === 'X2') return away >= home;
-        if (selection === '12') return home !== away;
-        return false;
+    const evaluation = evaluateBet(
+      bet.selections.map((s) => ({
+        market: s.market,
+        selection: s.selection,
+        odds: Number(s.odds),
+        match: s.match,
+      })),
+      stake
+    );
 
-      case 'MARCAS_0_5':
-        return selection === 'Mais 0.5' ? total > 0.5 : total < 0.5;
-      case 'MARCAS_1_5':
-        return selection === 'Mais 1.5' ? total > 1.5 : total < 1.5;
-      case 'MARCAS_2_5':
-        return selection === 'Mais 2.5' ? total > 2.5 : total < 2.5;
-      case 'MARCAS_3_5':
-        return selection === 'Mais 3.5' ? total > 3.5 : total < 3.5;
-      case 'MARCAS_4_5':
-        return selection === 'Mais 4.5' ? total > 4.5 : total < 4.5;
+    if (evaluation.status === 'PENDING') return;
 
-      case 'AMBAS_MARCAM':
-        if (selection === 'Sim') return home > 0 && away > 0;
-        if (selection === 'Não') return home === 0 || away === 0;
-        return false;
-
-      case 'RESULTADO_CORRETO': {
-        const score = `${home}-${away}`;
-        return selection === score;
+    await prisma.$transaction(async (tx) => {
+      // BetSelection.odds is left untouched: it records the odds the bettor
+      // actually took, and that history must survive a later void. The void is
+      // expressed with `won = null` plus the recalculated ticket totals below.
+      // evaluateBet re-labels but never reorders, so index pairing is correct.
+      for (let i = 0; i < evaluation.selections.length; i++) {
+        const outcome = evaluation.selections[i].outcome;
+        await tx.betSelection.update({
+          where: { id: bet.selections[i].id },
+          data: { won: outcome === 'WON' ? true : outcome === 'LOST' ? false : null },
+        });
       }
 
-      case 'RESULTADO_INTERVALO':
-        // No feed populates halfTime scores, so this market can never be
-        // settled fairly — void it rather than force a loss.
-        if (htHome === null || htHome === undefined) return null;
-        if (htAway === null || htAway === undefined) return null;
-        if (selection === '1') return htHome > htAway;
-        if (selection === 'X') return htHome === htAway;
-        if (selection === '2') return htAway > htHome;
-        return false;
+      if (evaluation.status === 'LOST') {
+        const lost = await tx.bet.updateMany({
+          where: { id: bet.id, status: 'PENDING' },
+          data: { status: 'LOST', settledAt: new Date() },
+        });
+        if (lost.count !== 1) return;
 
-      case 'HANDICAP_n1_5':
-        if (selection.includes('Casa')) return (home - 1.5) > away;
-        return (away - 1.5) > home;
-      case 'HANDICAP_n0_5':
-        if (selection.includes('Casa')) return (home - 0.5) > away;
-        return (away - 0.5) > home;
-      case 'HANDICAP_0_0':
-        return null;
-      case 'HANDICAP_0_5':
-        if (selection.includes('Casa')) return (home + 0.5) > away;
-        return (away + 0.5) > home;
-      case 'HANDICAP_1_5':
-        if (selection.includes('Casa')) return (home + 1.5) > away;
-        return (away + 1.5) > home;
-
-      case 'IMPAR_PAR':
-        return selection === 'Ímpar' ? total % 2 === 1 : total % 2 === 0;
-
-      case 'GOLOS_0':
-      case 'GOLOS_1':
-      case 'GOLOS_2':
-      case 'GOLOS_3':
-      case 'GOLOS_4':
-      case 'GOLOS_5':
-      case 'GOLOS_6': {
-        const expectedTotal = parseInt(market.split('_').pop() || '0');
-        return total === expectedTotal;
+        await userService.updateStats(bet.userId, false, -stake, stake, tx);
+        await notificationService.create(
+          bet.userId,
+          'BET_LOST',
+          `Perdeste ${stake.toFixed(2)} créditos - multipla perdida`,
+          tx
+        );
+        return;
       }
 
-      default:
-        return false;
-    }
+      // WON. A ticket whose legs are all void reaches here with an effective
+      // total odds of 1.00, so the payout is exactly the stake. The bettor is
+      // made whole by this single increment — no separate refund, and the
+      // ticket is never marked CANCELLED (that status is reserved for a
+      // bettor-initiated cancellation).
+      const profit = round2(evaluation.effectivePotentialReturn - stake);
+      const claimed = await tx.bet.updateMany({
+        where: { id: bet.id, status: 'PENDING' },
+        data: {
+          status: 'WON',
+          settledAt: new Date(),
+          // Store the effective figures so ticket history shows what was paid.
+          totalOdds: evaluation.effectiveTotalOdds,
+          potentialReturn: evaluation.effectivePotentialReturn,
+        },
+      });
+      if (claimed.count !== 1) return;
+
+      await tx.user.update({
+        where: { id: bet.userId },
+        data: { balance: { increment: evaluation.effectivePotentialReturn } },
+      });
+      await userService.updateStats(bet.userId, true, profit, stake, tx);
+      await notificationService.create(
+        bet.userId,
+        'BET_WON',
+        `Ganhaste ${evaluation.effectivePotentialReturn.toFixed(2)} créditos!${describeVoids(evaluation.voidCount)}`,
+        tx
+      );
+    });
   },
 };

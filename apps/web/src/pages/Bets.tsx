@@ -168,33 +168,48 @@ export default function Bets() {
 
               {/* Selections */}
               <div className="px-4 pb-4 space-y-2">
-                {bet.selections.map((sel) => (
+                {bet.selections.map((sel) => {
+                  // A voided match leaves won === null, but that is NOT the same
+                  // as a selection still waiting for its result. Telling them
+                  // apart matters: a void leg drops out of the accumulator at
+                  // odds 1.00, while an undecided leg is still in play.
+                  const isVoid = sel.match.status === 'VOID';
+                  return (
                   <div key={sel.id} className={`flex items-center justify-between p-3 rounded-xl text-sm ${
                     sel.won === true ? 'bg-green-500/10 border border-green-500/20' :
                     sel.won === false ? 'bg-red-500/10 border border-red-500/20' :
+                    isVoid ? 'bg-neon-blue/10 border border-neon-blue/20' :
                     'bg-gray-700/50'
                   }`}>
                     <div className="flex-1 min-w-0">
                       <p className="font-semibold truncate">{sel.match.homeTeam} vs {sel.match.awayTeam}</p>
-                      <p className={`text-xs ${sel.won === true ? 'text-green-400' : sel.won === false ? 'text-red-400' : 'text-gray-400'}`}>
+                      <p className={`text-xs ${sel.won === true ? 'text-green-400' : sel.won === false ? 'text-red-400' : isVoid ? 'text-neon-blue' : 'text-gray-400'}`}>
                         {getSelectionLabel(sel)} @ {sel.odds.toFixed(2)}
+                        {isVoid && <span className="ml-2 text-neon-blue font-semibold">VOID</span>}
                       </p>
                     </div>
-                    {sel.match.status === 'FINISHED' && (
+                    {isVoid ? (
+                      <div className="text-right mr-3">
+                        <p className="text-[10px] text-neon-blue font-bold">Cota efetiva</p>
+                        <p className="font-bold text-sm text-neon-blue">1.00</p>
+                      </div>
+                    ) : sel.match.status === 'FINISHED' ? (
                       <div className="text-right mr-3">
                         <p className="text-[10px] text-gray-500">Resultado</p>
                         <p className="font-bold text-sm">{sel.match.homeScore} - {sel.match.awayScore}</p>
                       </div>
-                    )}
-                    {sel.match.status !== 'FINISHED' && (
+                    ) : (
                       <div className="text-right mr-3">
                         <p className="text-[10px] text-gray-600">Agendado</p>
                         <p className="text-[10px] text-gray-500">{new Date(sel.match.matchDate).toLocaleDateString('pt-PT')}</p>
                       </div>
                     )}
-                    <span className="text-lg">{sel.won === true ? '✅' : sel.won === false ? '❌' : sel.match.status === 'FINISHED' ? '❓' : '⏳'}</span>
+                    <span className="text-lg">
+                      {sel.won === true ? '✅' : sel.won === false ? '❌' : isVoid ? '➖' : '⏳'}
+                    </span>
                   </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Bottom Bar */}

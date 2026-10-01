@@ -98,12 +98,16 @@ export const userService = {
 
     const newRoi = totalStaked > 0 ? (newProfit / totalStaked) * 100 : 0;
 
+    // Counter fields use atomic increments so two concurrent settlements on the
+    // same user cannot overwrite each other's read-modify-write. `profit` is
+    // included in the same increment rather than being written as an absolute
+    // value computed from the stale read above.
     return client.user.update({
       where: { id: userId },
       data: {
-        betsCount: newBetsCount,
-        betsWon: newBetsWon,
-        profit: newProfit,
+        betsCount: { increment: 1 },
+        betsWon: won ? { increment: 1 } : undefined,
+        profit: { increment: profit },
         roi: Math.round(newRoi * 100) / 100,
       },
     });

@@ -94,6 +94,11 @@ export const matchService = {
       });
 
       if (existing) {
+        // A match an admin marked VOID must stay VOID. Without this guard a
+        // later sync would flip it back to SCHEDULED/LIVE/FINISHED and quietly
+        // restore the event into accumulators the operator had removed.
+        if (existing.status === 'VOID') continue;
+
         await prisma.match.update({
           where: { id: existing.id },
           data: {
@@ -231,6 +236,12 @@ export const matchService = {
   },
 
   async updateScore(id: string, data: { homeScore: number; awayScore: number; status: string }) {
+    const existing = await prisma.match.findUnique({ where: { id }, select: { status: true } });
+    if (!existing) throw new Error('Jogo não encontrado');
+    // Scoring a voided match would silently re-admit it to accumulators. The
+    // operator has to explicitly lift the void first.
+    if (existing.status === 'VOID') throw new Error('Jogo marcado como VOID - anula o VOID antes de atualizar o resultado');
+
     await prisma.match.update({
       where: { id },
       data: { homeScore: data.homeScore, awayScore: data.awayScore, status: data.status },
@@ -241,6 +252,38 @@ export const matchService = {
       include: { odds: true },
     });
     return updated && { ...updated, odds: mapOdds(updated.odds) };
+  },
+
+  // Admin marks an event as void. This is NOT a 0-0 result and NOT a
+  // FINISHED match: the event produced no playable outcome, so its selections
+  // drop out of any accumulator at odds 1.00. Scores are deliberately left
+  // untouched so a void never fabricates a result.
+  async voidMatch(id: string) {
+    const match = await prisma.match.findUnique({ where: { id }, select: { id: true, status: true } });
+    if (!match) throw new Error('Jogo não encontrado');
+    if (match.status === 'VOID') throw new Error('Jogo já está marcado como VOID');
+
+    const updated = await prisma.match.update({
+      where: { id },
+      data: { status: 'VOID' },
+      include: { odds: true },
+    });
+    return { ...updated, odds: mapOdds(updated.odds) };
+  },
+
+  // Clears a void so the match can be scored normally again. Without this an
+  // accidental void would permanently strip the event from every ticket.
+  async unvoidMatch(id: string) {
+    const match = await prisma.match.findUnique({ where: { id }, select: { id: true, status: true } });
+    if (!match) throw new Error('Jogo não encontrado');
+    if (match.status !== 'VOID') throw new Error('Jogo não está marcado como VOID');
+
+    const updated = await prisma.match.update({
+      where: { id },
+      data: { status: 'SCHEDULED' },
+      include: { odds: true },
+    });
+    return { ...updated, odds: mapOdds(updated.odds) };
   },
 
   // Refuses to delete a match that already has bets on it, so settled history
