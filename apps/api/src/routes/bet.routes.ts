@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { betService } from '../services/bet.service';
+import { betService, BetCancelConflictError } from '../services/bet.service';
 import { authenticate, requireAdmin } from '../middleware/auth';
 import { validate } from '../middleware/validation';
 import { placeBetSchema, paginationSchema } from '../config/env';
@@ -59,6 +59,12 @@ router.post('/:id/cancel', authenticate, async (req: AuthRequest, res) => {
     res.json(bet);
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Erro ao colocar aposta';
+    // A started match is a conflict, not a malformed request: the ticket is
+    // well-formed and the caller owns it, it is simply no longer cancellable.
+    // 400 would invite a retry that can never succeed.
+    if (error instanceof BetCancelConflictError) {
+      return res.status(409).json({ error: message });
+    }
     res.status(400).json({ error: message });
   }
 });

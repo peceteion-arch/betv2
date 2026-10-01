@@ -1,7 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { notificationService } from './notification.service';
 import { userService } from './user.service';
-import { evaluateBet, describeVoids, VOID_MATCH_STATUSES } from '../lib/settlement';
+import { evaluateBet, describeVoids } from '../lib/settlement';
 import { Prisma } from '@prisma/client';
 
 // stake/totalOdds/potentialReturn and BetSelection.odds are @db.Decimal, so
@@ -18,6 +18,12 @@ const mapBet = (bet: any) => ({
 });
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
+
+// A ticket may only be cancelled while every one of its matches is still
+// open. Same rule placeBet applies, and it is deliberately NOT left to the
+// UI: the button is trivially bypassed, and a ticket whose only losing leg
+// has already been played must never be refundable.
+export class BetCancelConflictError extends Error {}
 
 export const betService = {
   async placeBet(userId: string, stake: number, selections: Array<{
@@ -149,10 +155,25 @@ export const betService = {
 
   async cancel(betId: string, userId: string) {
     const result = await prisma.$transaction(async (tx) => {
-      const bet = await tx.bet.findUnique({ where: { id: betId } });
+      const bet = await tx.bet.findUnique({
+        where: { id: betId },
+        include: { selections: { include: { match: { select: { status: true, matchDate: true } } } } },
+      });
       if (!bet) throw new Error('Bet not found');
       if (bet.userId !== userId) throw new Error('Not your bet');
       if (bet.status !== 'PENDING') throw new Error('Can only cancel pending bets');
+
+      // The ownership/PENDING checks above were the whole of the old guard, so a
+      // ticket whose first match had already finished (and whose backing
+      // selection had already lost) could still be cancelled, handing the
+      // stake back for free. One losing leg is fatal to an accumulator, so the
+      // moment any match has started the ticket is out of the bettor's hands.
+      // Checked here, inside the same transaction as the claim below, so the
+      // match state cannot change between the read and the refund.
+      const now = new Date();
+      if (bet.selections.some((s) => s.match.status !== 'SCHEDULED' || s.match.matchDate <= now)) {
+        throw new BetCancelConflictError('Não é possível anular: um dos jogos já começou ou terminou');
+      }
 
       // Claim the ticket with a status-guarded UPDATE before refunding. The
       // old code did the refund first and then a bare `update({where: {id}})`,
@@ -249,11 +270,13 @@ export const betService = {
     // A match that has not finished yet, or that finished without its result
     // being recorded, is NOT a void — it is simply not ready. The ticket stays
     // PENDING and is re-evaluated on the next settlement run.
-    const allDecided = bet.selections.every(
-      (s) => s.match.status === 'FINISHED' || VOID_MATCH_STATUSES.includes(s.match.status)
-    );
-    if (!allDecided) return;
-
+    //
+    // "Every leg decided" is no longer the precondition. It used to be, and it
+    // was what held a dead ticket open: one lost leg plus two unplayed legs sat
+    // PENDING for days, and PENDING is cancellable, so the losing bettor could
+    // refund a bet that was already lost. A ticket whose evaluation comes back
+    // anything but PENDING is settled now; evaluateBet is the single authority
+    // on whether the ticket is decided.
     const evaluation = evaluateBet(
       bet.selections.map((s) => ({
         market: s.market,
@@ -267,10 +290,27 @@ export const betService = {
     if (evaluation.status === 'PENDING') return;
 
     await prisma.$transaction(async (tx) => {
+      // Claim the ticket BEFORE touching the selection flags. The flags used to
+      // be written first, and the losing `return` on a lost race is a COMMIT of
+      // everything written so far, not a rollback: a cancel() that had already
+      // refunded the ticket would still have left the other side's won=true /
+      // won=false flags committed onto a CANCELLED bet. Claiming first means
+      // the flags are only ever written by the racer that actually owns the
+      // ticket, and count !== 1 exits before writing anything.
+      if (evaluation.status === 'LOST') {
+        const lost = await tx.bet.updateMany({
+          where: { id: bet.id, status: 'PENDING' },
+          data: { status: 'LOST', settledAt: new Date() },
+        });
+        if (lost.count !== 1) return;
+      }
+
       // BetSelection.odds is left untouched: it records the odds the bettor
       // actually took, and that history must survive a later void. The void is
       // expressed with `won = null` plus the recalculated ticket totals below.
       // evaluateBet re-labels but never reorders, so index pairing is correct.
+      // Legs that are still UNRESOLVED keep won = null — the ticket is settled,
+      // but those legs never produced a result.
       for (let i = 0; i < evaluation.selections.length; i++) {
         const outcome = evaluation.selections[i].outcome;
         await tx.betSelection.update({
@@ -280,12 +320,6 @@ export const betService = {
       }
 
       if (evaluation.status === 'LOST') {
-        const lost = await tx.bet.updateMany({
-          where: { id: bet.id, status: 'PENDING' },
-          data: { status: 'LOST', settledAt: new Date() },
-        });
-        if (lost.count !== 1) return;
-
         await userService.updateStats(bet.userId, false, -stake, stake, tx);
         await notificationService.create(
           bet.userId,

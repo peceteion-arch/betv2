@@ -32,6 +32,21 @@ async function makeMatch(status: string, home: number | null, away: number | nul
   });
 }
 
+// makeMatch always dates its match in the past, which is right for settlement
+// fixtures but disqualifies them from cancel(): a ticket can only be cancelled
+// while every leg is SCHEDULED *and* still in the future, the same rule
+// placeBet applies. Cancellation fixtures need the other kind of match.
+async function makeFutureMatch(daysAhead = 7, status = 'SCHEDULED') {
+  return prisma.match.create({
+    data: {
+      externalId: `f-${Date.now()}-${Math.random()}`,
+      homeTeam: 'H', awayTeam: 'A', league: 'L', country: 'Manual',
+      matchDate: new Date(Date.now() + daysAhead * 86_400_000),
+      status, homeScore: null, awayScore: null,
+    },
+  });
+}
+
 // Places a bet directly so the fixture is independent of placeBet's validation.
 async function placeBet(userId: string, stake: number, legs: Array<{ matchId: string; market: string; selection: string; odds: number }>) {
   return prisma.$transaction(async (tx) => {
@@ -207,9 +222,21 @@ async function main() {
     const after = await prisma.bet.findUniqueOrThrow({ where: { id: bet.id } });
     const bal = await balanceOf(user.id);
     console.log(`      settle=${results[0].status} cancel=${results[1].status} -> status=${after.status} balance=${bal}`);
-    // Exactly one of the two money paths may apply.
-    const legal = (after.status === 'WON' && bal === '110.00') || (after.status === 'CANCELLED' && bal === '100.00');
-    check('exactly one money path applied (no payout+refund)', legal, true);
+
+    // The match here is FINISHED, so cancel() is now refused up front by the
+    // match-state check — that check runs inside the same transaction as the
+    // claim, and it is what the race used to get past. The status-guarded
+    // updateMany is still the backstop that makes this hold for the cases the
+    // check cannot see (e.g. a future match that settlement reaches first), so
+    // the assertion below stays written against "exactly one money path",
+    // not against any particular status.
+    const settledWon = after.status === 'WON' && bal === '110.00';
+    const settledLost = after.status === 'LOST' && bal === '90.00';
+    const cancelledRefund = after.status === 'CANCELLED' && bal === '100.00';
+    check('exactly one money path applied (no payout+refund)',
+      settledWon || settledLost || cancelledRefund, true);
+    check('balance equals stake + payout, stake + nothing, or stake refunded',
+      [bal], ['110.00', '90.00', '100.00']);
   }
 
   console.log('\n=== 9. VOID survives a sync, and scoring a void is refused ===');
@@ -268,6 +295,173 @@ async function main() {
     // 1.95 * 1.87 = 3.6465, stake*raw = 364.65, while the ticket would have
     // displayed totalOdds 3.65 -> implying 365.00. The invariant now holds.
     check('invariant stake*totalOdds === payout', money(Number(placed.stake) * Number(placed.totalOdds)), money(placed.potentialReturn));
+  }
+
+  console.log('\n=== 11. cancel() only works while every leg is still open ===');
+  {
+    const { betService } = await import('../src/services/bet.service');
+
+    // 11a. All legs SCHEDULED and in the future -> the ticket is cancellable and
+    // the stake comes back in full.
+    {
+      const user = await makeUser('cancel-ok');
+      const a = await makeFutureMatch(7);
+      const b = await makeFutureMatch(3);
+      await placeBet(user.id, 10, [
+        { matchId: a.id, market: '1X2', selection: '1', odds: 1.8 },
+        { matchId: b.id, market: '1X2', selection: '1', odds: 2.0 },
+      ]);
+      const bet = await prisma.bet.findFirstOrThrow({ where: { userId: user.id } });
+      check('balance after stake', await balanceOf(user.id), '90.00');
+
+      const cancelled = await betService.cancel(bet.id, user.id);
+      check('ticket marked CANCELLED', cancelled.status, 'CANCELLED');
+      check('stake refunded in full', await balanceOf(user.id), '100.00');
+
+      // 11b. Cancelling the same ticket again must not refund a second time.
+      // The status guard on the claim is what stops this, and it is the reason
+      // the double-cancel path can never be reached by double-submitting.
+      let secondThrew = false;
+      try {
+        await betService.cancel(bet.id, user.id);
+      } catch {
+        secondThrew = true;
+      }
+      check('second cancel rejected', secondThrew, true);
+      check('balance unchanged after second cancel', await balanceOf(user.id), '100.00');
+      check('ticket still CANCELLED', (await prisma.bet.findUniqueOrThrow({ where: { id: bet.id } })).status, 'CANCELLED');
+    }
+
+    // 11c. A finished leg -> refused. This is the abuse: the leg already lost,
+    // yet the ticket was still PENDING and refundable.
+    {
+      const user = await makeUser('cancel-finished');
+      const a = await makeMatch('FINISHED', 1, 3);
+      const b = await makeFutureMatch(7);
+      await placeBet(user.id, 10, [
+        { matchId: a.id, market: '1X2', selection: '1', odds: 1.9 }, // lost: 1-3
+        { matchId: b.id, market: '1X2', selection: '1', odds: 2.0 },
+      ]);
+      const bet = await prisma.bet.findFirstOrThrow({ where: { userId: user.id } });
+      let threw = false;
+      try {
+        await betService.cancel(bet.id, user.id);
+      } catch {
+        threw = true;
+      }
+      check('cancel refused on a FINISHED leg', threw, true);
+      check('ticket still PENDING', (await prisma.bet.findUniqueOrThrow({ where: { id: bet.id } })).status, 'PENDING');
+      check('no refund', await balanceOf(user.id), '90.00');
+    }
+
+    // 11d. A live leg -> refused.
+    {
+      const user = await makeUser('cancel-live');
+      const a = await makeMatch('LIVE', 0, 0);
+      const b = await makeFutureMatch(7);
+      await placeBet(user.id, 10, [
+        { matchId: a.id, market: '1X2', selection: '1', odds: 1.9 },
+        { matchId: b.id, market: '1X2', selection: '1', odds: 2.0 },
+      ]);
+      const bet = await prisma.bet.findFirstOrThrow({ where: { userId: user.id } });
+      let threw = false;
+      try {
+        await betService.cancel(bet.id, user.id);
+      } catch {
+        threw = true;
+      }
+      check('cancel refused on a LIVE leg', threw, true);
+      check('no refund', await balanceOf(user.id), '90.00');
+    }
+
+    // 11e. SCHEDULED but the kick-off has passed -> refused. Status alone is not
+    // enough: a match can sit SCHEDULED after its scheduled time while the feed
+    // is late, and it is already un-bettable by the same rule placeBet applies.
+    {
+      const user = await makeUser('cancel-past');
+      const a = await makeFutureMatch(7);
+      await prisma.match.update({ where: { id: a.id }, data: { matchDate: new Date(Date.now() - 3_600_000) } });
+      await placeBet(user.id, 10, [{ matchId: a.id, market: '1X2', selection: '1', odds: 2.0 }]);
+      const bet = await prisma.bet.findFirstOrThrow({ where: { userId: user.id } });
+      check('fixture really is SCHEDULED with a past date',
+        (await prisma.match.findUniqueOrThrow({ where: { id: a.id } })).status, 'SCHEDULED');
+      let threw = false;
+      try {
+        await betService.cancel(bet.id, user.id);
+      } catch {
+        threw = true;
+      }
+      check('cancel refused on a past kick-off', threw, true);
+      check('no refund', await balanceOf(user.id), '90.00');
+    }
+
+    // 11f. The full abuse path: a lost leg + an unplayed leg. Settlement must
+    // turn the ticket LOST on the lost leg alone — without that, the ticket
+    // stays PENDING, cancel() refuses it (the finished leg), and the money
+    // stays correctly tied up either way. Both halves are asserted because
+    // either one alone leaves the ticket in a state the user can exploit or
+    // lose money on.
+    {
+      const user = await makeUser('lost-then-cancel');
+      const a = await makeMatch('FINISHED', 1, 3);   // Canada vs Mexico, home leg lost
+      const b = await makeFutureMatch(7);
+      await placeBet(user.id, 10, [
+        { matchId: a.id, market: '1X2', selection: '1', odds: 1.9 },
+        { matchId: b.id, market: '1X2', selection: '1', odds: 2.0 },
+      ]);
+      const bet = await prisma.bet.findFirstOrThrow({ where: { userId: user.id } });
+
+      // Before settlement: the ticket is still PENDING, so cancel() — not
+      // settlement — is what must keep the money away from the bettor.
+      let earlyThrew = false;
+      try {
+        await betService.cancel(bet.id, user.id);
+      } catch {
+        earlyThrew = true;
+      }
+      check('cancel refused before settlement', earlyThrew, true);
+      check('balance untouched before settlement', await balanceOf(user.id), '90.00');
+
+      await betService.settlePendingBets();
+
+      const after = await prisma.bet.findUniqueOrThrow({
+        where: { id: bet.id }, include: { selections: true },
+      });
+      check('ticket settled as LOST on the lost leg alone', after.status, 'LOST');
+      check('stake not refunded', await balanceOf(user.id), '90.00');
+      const lostSel = after.selections.find((s) => s.matchId === a.id)!;
+      const pendingSel = after.selections.find((s) => s.matchId === b.id)!;
+      check('lost leg flagged won=false', lostSel.won, false);
+      check('unplayed leg left undecided', pendingSel.won, null);
+
+      let lateThrew = false;
+      try {
+        await betService.cancel(bet.id, user.id);
+      } catch {
+        lateThrew = true;
+      }
+      check('cancel refused after settlement', lateThrew, true);
+      check('balance still not refunded', await balanceOf(user.id), '90.00');
+    }
+
+    // 11g. Ownership is still enforced first, and a stranger cannot probe the
+    // match state of somebody else's ticket by cancelling it.
+    {
+      const owner = await makeUser('cancel-owner');
+      const stranger = await makeUser('cancel-stranger');
+      const a = await makeFutureMatch(7);
+      await placeBet(owner.id, 10, [{ matchId: a.id, market: '1X2', selection: '1', odds: 2.0 }]);
+      const bet = await prisma.bet.findFirstOrThrow({ where: { userId: owner.id } });
+      let threw = false;
+      try {
+        await betService.cancel(bet.id, stranger.id);
+      } catch {
+        threw = true;
+      }
+      check("another user's cancel rejected", threw, true);
+      check("other user's balance untouched", await balanceOf(stranger.id), '100.00');
+      check("ticket still PENDING", (await prisma.bet.findUniqueOrThrow({ where: { id: bet.id } })).status, 'PENDING');
+    }
   }
 
   console.log(`\n${failures === 0 ? 'ALL CHECKS PASSED' : failures + ' CHECK(S) FAILED'}`);

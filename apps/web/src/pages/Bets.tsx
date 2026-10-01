@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import api from '../lib/api';
 import { useAuth } from '../lib/auth';
 
@@ -30,22 +30,81 @@ interface Bet {
   selections: BetSelection[];
 }
 
+interface BetPage {
+  items: Bet[];
+  nextCursor: string | null;
+}
+
+// Mirrors the server's cancel() rule: a ticket is only cancellable while every
+// match is SCHEDULED *and* its kick-off is still ahead of us. Hiding the
+// button on any other basis (PENDING alone) is what let the UI offer to cancel
+// tickets whose legs had already been played.
+const canCancel = (bet: Bet) => {
+  if (bet.status !== 'PENDING') return false;
+  const now = Date.now();
+  return bet.selections.every(
+    (s) => s.match.status === 'SCHEDULED' && new Date(s.match.matchDate).getTime() > now
+  );
+};
+
 export default function Bets() {
   const [bets, setBets] = useState<Bet[]>([]);
   const [filter, setFilter] = useState('all');
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [cursor, setCursor] = useState<string | null>(null);
   const [error, setError] = useState('');
-  const { user, refreshUser } = useAuth();
+  const { refreshUser } = useAuth();
 
+  const buildUrl = (status: string, cur?: string | null) => {
+    const params = new URLSearchParams();
+    if (status !== 'all') params.set('status', status);
+    if (cur) params.set('cursor', cur);
+    const qs = params.toString();
+    return `/bets${qs ? `?${qs}` : ''}`;
+  };
+
+  // The API has always answered with { items, nextCursor } — unwrap it in one
+  // place so the list, the "load more" append and the post-cancel refetch all
+  // read the same shape.
+  const fetchPage = async (status: string, cur?: string | null): Promise<BetPage> => {
+    const r = await api.get(buildUrl(status, cur));
+    return Array.isArray(r.data) ? { items: r.data, nextCursor: null } : (r.data as BetPage);
+  };
+
+  // Filters are applied server-side, not by filtering the loaded page: the old
+  // code fetched everything and narrowed it in the browser, so the summary
+  // cards counted one status out of whatever page happened to be loaded.
   useEffect(() => {
     setLoading(true);
     setError('');
-    const params = filter === 'all' ? '' : `?status=${filter}`;
-    api.get(`/bets${params}`)
-      .then((r) => setBets(Array.isArray(r.data) ? r.data : r.data.items || []))
+    setCursor(null);
+    fetchPage(filter)
+      .then((data) => {
+        setBets(data.items || []);
+        setCursor(data.nextCursor ?? null);
+      })
       .catch(() => setError('Erro ao carregar apostas'))
       .finally(() => setLoading(false));
+    // fetchPage/buildUrl are pure and derived from `filter`; `filter` is the
+    // real dependency.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filter]);
+
+  const handleLoadMore = async () => {
+    if (!cursor) return;
+    setLoadingMore(true);
+    try {
+      const data = await fetchPage(filter, cursor);
+      // Append: the cursor page holds tickets older than what is on screen.
+      setBets((prev) => [...prev, ...(data.items || [])]);
+      setCursor(data.nextCursor ?? null);
+    } catch {
+      setError('Erro ao carregar mais apostas');
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const handleCancel = async (betId: string) => {
     if (!confirm('Cancelar aposta?')) return;
@@ -55,6 +114,20 @@ export default function Bets() {
       setBets((prev) => prev.map((b) => b.id === betId ? { ...b, status: 'CANCELLED' } : b));
     } catch (err: any) {
       alert(err.response?.data?.error || 'Erro');
+      // A 409 means the server refused: a match had already started, or another
+      // settlement run got there first. What we hold for this bet is stale, so
+      // pull the real state back rather than guessing — and since the cursor
+      // page may have been split across the refetch, restart from the top.
+      const status = err?.response?.status;
+      if (status === 409 || status === 400) {
+        try {
+          const data = await fetchPage(filter);
+          setBets(data.items || []);
+          setCursor(data.nextCursor ?? null);
+        } catch {
+          setError('Erro ao carregar apostas');
+        }
+      }
     }
   };
 
@@ -99,27 +172,30 @@ export default function Bets() {
         ))}
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-3 gap-3">
-        <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-3 text-center">
-          <p className="text-2xl font-black text-green-400">{bets.filter((b) => b.status === 'WON').length}</p>
-          <p className="text-[10px] text-green-400/70 uppercase">Ganhos</p>
+      {/* Summary Cards — only on the unfiltered view. Under a status filter the
+          list holds one status, so these would read 0/0/n and just be noise. */}
+      {filter === 'all' && (
+        <div className="grid grid-cols-3 gap-3">
+          <div className="bg-green-500/10 border border-green-500/20 rounded-xl p-3 text-center">
+            <p className="text-2xl font-black text-green-400">{bets.filter((b) => b.status === 'WON').length}</p>
+            <p className="text-[10px] text-green-400/70 uppercase">Ganhos</p>
+          </div>
+          <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-center">
+            <p className="text-2xl font-black text-red-400">{bets.filter((b) => b.status === 'LOST').length}</p>
+            <p className="text-[10px] text-red-400/70 uppercase">Perdidos</p>
+          </div>
+          <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3 text-center">
+            <p className="text-2xl font-black text-yellow-400">{bets.filter((b) => b.status === 'PENDING').length}</p>
+            <p className="text-[10px] text-yellow-400/70 uppercase">Pendentes</p>
+          </div>
         </div>
-        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-center">
-          <p className="text-2xl font-black text-red-400">{bets.filter((b) => b.status === 'LOST').length}</p>
-          <p className="text-[10px] text-red-400/70 uppercase">Perdidos</p>
-        </div>
-        <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3 text-center">
-          <p className="text-2xl font-black text-yellow-400">{bets.filter((b) => b.status === 'PENDING').length}</p>
-          <p className="text-[10px] text-yellow-400/70 uppercase">Pendentes</p>
-        </div>
-      </div>
+      )}
 
       {/* Error */}
       {error && (
         <div className="text-center py-16">
           <p className="text-neon-red text-sm mb-2">{error}</p>
-          <button onClick={() => setFilter(filter)} className="btn-neon text-xs">Tentar</button>
+          <button onClick={() => setFilter((f) => (f === 'all' ? '' : 'all') + filter)} className="btn-neon text-xs">Tentar</button>
         </div>
       )}
 
@@ -174,6 +250,13 @@ export default function Bets() {
                   // apart matters: a void leg drops out of the accumulator at
                   // odds 1.00, while an undecided leg is still in play.
                   const isVoid = sel.match.status === 'VOID';
+                  // The match is over and was played normally, but the result
+                  // was never recorded (or we lack the data this market needs,
+                  // e.g. half-time scores). That is NOT the same as a match that
+                  // has not kicked off: this leg can never be decided, while a
+                  // scheduled match still can.
+                  const awaitingDecision =
+                    sel.won === null && sel.match.status === 'FINISHED' && !isVoid;
                   return (
                   <div key={sel.id} className={`flex items-center justify-between p-3 rounded-xl text-sm ${
                     sel.won === true ? 'bg-green-500/10 border border-green-500/20' :
@@ -204,9 +287,15 @@ export default function Bets() {
                         <p className="text-[10px] text-gray-500">{new Date(sel.match.matchDate).toLocaleDateString('pt-PT')}</p>
                       </div>
                     )}
-                    <span className="text-lg">
-                      {sel.won === true ? '✅' : sel.won === false ? '❌' : isVoid ? '➖' : '⏳'}
-                    </span>
+                    {awaitingDecision ? (
+                      <span className="text-[10px] text-gray-500 text-right leading-tight max-w-20">
+                        A aguardar decisão
+                      </span>
+                    ) : (
+                      <span className="text-lg">
+                        {sel.won === true ? '✅' : sel.won === false ? '❌' : isVoid ? '➖' : '⏳'}
+                      </span>
+                    )}
                   </div>
                   );
                 })}
@@ -219,7 +308,7 @@ export default function Bets() {
                   <span>Odds: <b className="text-white">{bet.totalOdds.toFixed(2)}</b></span>
                   <span>Retorno: <b className="text-blue-400">{bet.potentialReturn.toFixed(0)} CR</b></span>
                 </div>
-                {bet.status === 'PENDING' && (
+                {canCancel(bet) && (
                   <button
                     onClick={() => handleCancel(bet.id)}
                     className="text-xs text-red-400 hover:text-red-300 font-semibold px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 active:scale-95"
@@ -232,6 +321,18 @@ export default function Bets() {
           );
         })}
       </div>
+
+      {/* Pagination — the API has always returned { items, nextCursor }; the
+          cursor was being dropped, so older tickets were unreachable. */}
+      {!error && !loading && cursor && (
+        <button
+          onClick={handleLoadMore}
+          disabled={loadingMore}
+          className="w-full py-2.5 rounded-xl text-xs font-bold bg-gray-800 text-gray-300 active:scale-95 disabled:opacity-50"
+        >
+          {loadingMore ? 'A carregar...' : 'Carregar mais'}
+        </button>
+      )}
     </div>
   );
 }

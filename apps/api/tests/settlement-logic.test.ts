@@ -231,3 +231,89 @@ describe('accumulator settlement with void legs', () => {
     expect(result.effectivePotentialReturn).toBe(366);
   });
 });
+
+describe('a lost leg settles the ticket immediately', () => {
+  // The abuse these lock down: a ticket whose first match had already finished
+  // and lost stayed PENDING until the other matches finished, and PENDING was
+  // cancellable — so the bettor cancelled it and got the stake back for free.
+  // A lost leg must be enough on its own to settle the ticket as LOST, so the
+  // ticket stops being cancellable at the moment it becomes unwinnable.
+
+  const lostLeg = leg('1X2', '2', 1.9, match(3, 1)); // away side on a 3-1 home win
+  const undecided = leg('1X2', '1', 2.0, match(0, 0, 'LIVE'));
+  const noScoreYet = leg('1X2', '1', 2.0, match(null, null));
+  const notStarted = leg('1X2', '1', 2.0, match(null, null, 'SCHEDULED'));
+
+  it('LOST + a LIVE leg settles as LOST, not PENDING', () => {
+    const result = evaluateBet([lostLeg, undecided], 10);
+    expect(result.status).toBe('LOST');
+    expect(result.effectiveTotalOdds).toBe(0);
+    expect(result.effectivePotentialReturn).toBe(0);
+  });
+
+  it('LOST + a FINISHED leg with no score yet settles as LOST', () => {
+    const result = evaluateBet([lostLeg, noScoreYet], 10);
+    expect(result.status).toBe('LOST');
+    expect(result.effectivePotentialReturn).toBe(0);
+  });
+
+  it('LOST + a leg that has not kicked off settles as LOST', () => {
+    const result = evaluateBet([lostLeg, notStarted], 10);
+    expect(result.status).toBe('LOST');
+    expect(result.effectivePotentialReturn).toBe(0);
+  });
+
+  it('the undecided legs stay flagged undecided, not as wins or losses', () => {
+    const result = evaluateBet([lostLeg, undecided, notStarted], 10);
+    expect(result.status).toBe('LOST');
+    expect(result.selections.map((s) => s.outcome)).toEqual(['LOST', 'UNRESOLVED', 'UNRESOLVED']);
+  });
+
+  it('VOID + LOST stays LOST when the void leg is itself still undecided', () => {
+    const voidLeg = leg('1X2', '1', 2.0, match(null, null, 'VOID'));
+    const result = evaluateBet([voidLeg, lostLeg, undecided], 10);
+    expect(result.status).toBe('LOST');
+    expect(result.effectivePotentialReturn).toBe(0);
+    expect(result.voidCount).toBe(1);
+  });
+
+  it('a winning leg alongside a lost one does not keep the ticket alive', () => {
+    // Canada vs Mexico finished 1-3: backing the home side loses, backing the
+    // away side wins. The ticket is lost, and that must not change because the
+    // other leg on the same match won.
+    const alsoLost = leg('1X2', '1', 1.9, match(1, 3));
+    const result = evaluateBet([lostLeg, alsoLost, undecided], 10);
+    expect(result.status).toBe('LOST');
+  });
+});
+
+describe('a winning leg alongside an undecided one still waits', () => {
+  // The counterpart to the cases above, and the reason LOST is checked first
+  // rather than INSTEAD of UNRESOLVED: a WON leg is not decisive on its own.
+  // Moving up the LOST test must not start settling tickets that are still
+  // genuinely winnable — those stay PENDING until every leg is decided.
+
+  it('WON + UNRESOLVED stays PENDING', () => {
+    const won = leg('1X2', '1', 1.8, match(2, 1));
+    const result = evaluateBet([won, leg('1X2', '1', 2.0, match(0, 0, 'LIVE'))], 10);
+    expect(result.status).toBe('PENDING');
+    expect(result.effectivePotentialReturn).toBe(0);
+  });
+
+  it('WON + VOID + UNRESOLVED stays PENDING', () => {
+    const won = leg('1X2', '1', 1.8, match(2, 1));
+    const voidLeg = leg('1X2', 'X', 2.0, match(null, null, 'VOID'));
+    const undecided = leg('1X2', '1', 2.0, match(null, null, 'SCHEDULED'));
+    const result = evaluateBet([won, voidLeg, undecided], 10);
+    expect(result.status).toBe('PENDING');
+    expect(result.voidCount).toBe(1);
+    expect(result.winCount).toBe(1);
+  });
+
+  it('VOID + UNRESOLVED stays PENDING — a void leg is not a loss and not a win', () => {
+    const voidLeg = leg('1X2', '1', 2.0, match(null, null, 'VOID'));
+    const result = evaluateBet([voidLeg, leg('1X2', '1', 2.0, match(null, null))], 10);
+    expect(result.status).toBe('PENDING');
+    expect(result.effectivePotentialReturn).toBe(0);
+  });
+});

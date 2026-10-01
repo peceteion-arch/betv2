@@ -206,8 +206,12 @@ export const checkSelectionOutcome = (
  * Decides the fate of a whole ticket and computes the single payout figure.
  *
  * Rules (in order):
- *   1. Any UNRESOLVED selection  -> ticket stays PENDING, nothing is settled.
- *   2. Any LOST selection        -> ticket LOST, payout 0, no refund.
+ *   1. Any LOST selection        -> ticket LOST, payout 0, no refund. Checked
+ *                                   before UNRESOLVED on purpose: one lost leg
+ *                                   already kills the accumulator, so the
+ *                                   ticket must not sit PENDING (and therefore
+ *                                   cancellable) waiting for the other matches.
+ *   2. Any UNRESOLVED selection  -> ticket stays PENDING, nothing is settled.
  *   3. Otherwise                 -> ticket WON. Void legs multiply by 1.00.
  *
  * A ticket whose legs are all VOID is reported as WON with an effective total
@@ -230,12 +234,18 @@ export const evaluateBet = (selections: BetSelectionInput[], stake: number): Bet
   const voidCount = evaluated.filter((s) => s.outcome === 'VOID').length;
   const winCount = evaluated.filter((s) => s.outcome === 'WON').length;
 
-  if (evaluated.some((s) => s.outcome === 'UNRESOLVED')) {
-    return { status: 'PENDING', selections: evaluated, effectiveTotalOdds: 0, effectivePotentialReturn: 0, voidCount, winCount };
-  }
-
+  // LOST is checked FIRST, deliberately. An accumulator dies on its first
+  // losing leg: the remaining legs can never make the ticket win, whatever
+  // they do. Testing UNRESOLVED first left such a ticket PENDING until every
+  // other match finished, which kept it refundable via cancel() the whole
+  // time — the exact hole that let a bettor cancel a ticket that had already
+  // lost. Settling the loss as soon as it is known closes that window.
   if (evaluated.some((s) => s.outcome === 'LOST')) {
     return { status: 'LOST', selections: evaluated, effectiveTotalOdds: 0, effectivePotentialReturn: 0, voidCount, winCount };
+  }
+
+  if (evaluated.some((s) => s.outcome === 'UNRESOLVED')) {
+    return { status: 'PENDING', selections: evaluated, effectiveTotalOdds: 0, effectivePotentialReturn: 0, voidCount, winCount };
   }
 
   // Every surviving leg is WON or VOID. Void legs contribute exactly 1.00, so
