@@ -23,7 +23,18 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 // open. Same rule placeBet applies, and it is deliberately NOT left to the
 // UI: the button is trivially bypassed, and a ticket whose only losing leg
 // has already been played must never be refundable.
-export class BetCancelConflictError extends Error {}
+export class BetCancelConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    // Under an ES5 target, `extends Error` downlevels to a plain Error call and
+    // the prototype chain is broken, so `instanceof BetCancelConflictError`
+    // silently returns false and the route falls through to its 400 instead of
+    // its 409. apps/api compiles at ES2020 today, where this is a no-op, but the
+    // three lines keep the discriminator correct if the target ever moves.
+    Object.setPrototypeOf(this, BetCancelConflictError.prototype);
+    this.name = 'BetCancelConflictError';
+  }
+}
 
 export const betService = {
   async placeBet(userId: string, stake: number, selections: Array<{
@@ -290,20 +301,30 @@ export const betService = {
     if (evaluation.status === 'PENDING') return;
 
     await prisma.$transaction(async (tx) => {
-      // Claim the ticket BEFORE touching the selection flags. The flags used to
-      // be written first, and the losing `return` on a lost race is a COMMIT of
-      // everything written so far, not a rollback: a cancel() that had already
-      // refunded the ticket would still have left the other side's won=true /
-      // won=false flags committed onto a CANCELLED bet. Claiming first means
-      // the flags are only ever written by the racer that actually owns the
-      // ticket, and count !== 1 exits before writing anything.
-      if (evaluation.status === 'LOST') {
-        const lost = await tx.bet.updateMany({
-          where: { id: bet.id, status: 'PENDING' },
-          data: { status: 'LOST', settledAt: new Date() },
-        });
-        if (lost.count !== 1) return;
-      }
+      // One claim, before anything is written, for BOTH branches. The flags used
+      // to be written first, and the losing `return` on a lost race is a COMMIT
+      // of everything written so far, not a rollback: a cancel() that had
+      // already refunded the ticket would still have left the other side's
+      // won=true / won=false flags committed onto a CANCELLED bet. Claiming
+      // first means the flags are only ever written by the racer that actually
+      // owns the ticket, and count !== 1 exits before writing anything.
+      //
+      // This was fixed on the LOST branch first and the WON branch kept the old
+      // order, which left exactly the same hole open on the paying branch.
+      const isWon = evaluation.status === 'WON';
+      const claimed = await tx.bet.updateMany({
+        where: { id: bet.id, status: 'PENDING' },
+        data: isWon
+          ? {
+              status: 'WON',
+              settledAt: new Date(),
+              // Store the effective figures so ticket history shows what was paid.
+              totalOdds: evaluation.effectiveTotalOdds,
+              potentialReturn: evaluation.effectivePotentialReturn,
+            }
+          : { status: 'LOST', settledAt: new Date() },
+      });
+      if (claimed.count !== 1) return;
 
       // BetSelection.odds is left untouched: it records the odds the bettor
       // actually took, and that history must survive a later void. The void is
@@ -319,7 +340,7 @@ export const betService = {
         });
       }
 
-      if (evaluation.status === 'LOST') {
+      if (!isWon) {
         await userService.updateStats(bet.userId, false, -stake, stake, tx);
         await notificationService.create(
           bet.userId,
@@ -336,18 +357,6 @@ export const betService = {
       // ticket is never marked CANCELLED (that status is reserved for a
       // bettor-initiated cancellation).
       const profit = round2(evaluation.effectivePotentialReturn - stake);
-      const claimed = await tx.bet.updateMany({
-        where: { id: bet.id, status: 'PENDING' },
-        data: {
-          status: 'WON',
-          settledAt: new Date(),
-          // Store the effective figures so ticket history shows what was paid.
-          totalOdds: evaluation.effectiveTotalOdds,
-          potentialReturn: evaluation.effectivePotentialReturn,
-        },
-      });
-      if (claimed.count !== 1) return;
-
       await tx.user.update({
         where: { id: bet.userId },
         data: { balance: { increment: evaluation.effectivePotentialReturn } },

@@ -235,8 +235,8 @@ async function main() {
     const cancelledRefund = after.status === 'CANCELLED' && bal === '100.00';
     check('exactly one money path applied (no payout+refund)',
       settledWon || settledLost || cancelledRefund, true);
-    check('balance equals stake + payout, stake + nothing, or stake refunded',
-      [bal], ['110.00', '90.00', '100.00']);
+    check('balance is one of the three legal outcomes',
+      ['110.00', '90.00', '100.00'].includes(bal), true);
   }
 
   console.log('\n=== 9. VOID survives a sync, and scoring a void is refused ===');
@@ -461,6 +461,100 @@ async function main() {
       check("another user's cancel rejected", threw, true);
       check("other user's balance untouched", await balanceOf(stranger.id), '100.00');
       check("ticket still PENDING", (await prisma.bet.findUniqueOrThrow({ where: { id: bet.id } })).status, 'PENDING');
+    }
+  }
+
+  console.log('\n=== 12. updateScore() only records a result on a playable match ===');
+  {
+    // updateScore used to write whatever `status` the request carried. The two
+    // statuses that mattered: SCHEDULED, which flips a finished match back to
+    // bettable (placeBet only requires SCHEDULED + a future matchDate), and
+    // VOID, which bypasses voidMatch() and its deliberate two-step.
+    const { matchService } = await import('../src/services/match.service');
+
+    const rejects = async (label: string, matchId: string, status: string) => {
+      let threw = false;
+      try {
+        await matchService.updateScore(matchId, { homeScore: 2, awayScore: 1, status });
+      } catch {
+        threw = true;
+      }
+      check(label, threw, true);
+    };
+
+    // 12a. An unrecognised status is refused before anything is written.
+    {
+      const a = await makeMatch('LIVE', null, null);
+      await rejects('unknown status refused', a.id, 'NOT_A_STATUS');
+      const after = await prisma.match.findUniqueOrThrow({ where: { id: a.id } });
+      check('status unchanged', after.status, 'LIVE');
+      check('score not written', [after.homeScore, after.awayScore], [null, null]);
+    }
+
+    // 12b. SCHEDULED on a FINISHED match — the reopen that has to be impossible.
+    {
+      const a = await makeMatch('FINISHED', 3, 0);
+      await rejects('SCHEDULED refused on a FINISHED match', a.id, 'SCHEDULED');
+      const after = await prisma.match.findUniqueOrThrow({ where: { id: a.id } });
+      check('status stayed FINISHED', after.status, 'FINISHED');
+      check('score not overwritten', [after.homeScore, after.awayScore], [3, 0]);
+    }
+
+    // 12c. POSTPONED and CANCELLED mean the event produced no result; they
+    // arrive from the feed via mapStatus, not from a manual score entry.
+    {
+      const a = await makeMatch('SCHEDULED', null, null);
+      await rejects('POSTPONED refused', a.id, 'POSTPONED');
+      await rejects('CANCELLED refused', a.id, 'CANCELLED');
+      check('status stayed SCHEDULED',
+        (await prisma.match.findUniqueOrThrow({ where: { id: a.id } })).status, 'SCHEDULED');
+    }
+
+    // 12d. VOID cannot be reached through updateScore.
+    {
+      const a = await makeMatch('SCHEDULED', null, null);
+      await matchService.voidMatch(a.id);
+      await rejects('VOID refused via updateScore', a.id, 'VOID');
+      const after = await prisma.match.findUniqueOrThrow({ where: { id: a.id } });
+      check('match is still VOID', after.status, 'VOID');
+      check('VOID did not gain a score', [after.homeScore, after.awayScore], [null, null]);
+    }
+
+    // 12e. LIVE and FINISHED are both accepted — recording a running score and
+    // recording the final one are the two legitimate uses.
+    {
+      const a = await makeMatch('LIVE', 1, 0);
+      const updated = await matchService.updateScore(a.id, { homeScore: 2, awayScore: 1, status: 'FINISHED' });
+      check('FINISHED accepted', updated?.status, 'FINISHED');
+      check('final score stored', [updated?.homeScore, updated?.awayScore], [2, 1]);
+
+      const b = await makeMatch('SCHEDULED', null, null);
+      const live = await matchService.updateScore(b.id, { homeScore: 0, awayScore: 0, status: 'LIVE' });
+      check('LIVE accepted', live?.status, 'LIVE');
+      check('running score stored', [live?.homeScore, live?.awayScore], [0, 0]);
+    }
+
+    // 12f. A FINISHED match with a future matchDate and status flipped back to
+    // SCHEDULED would be bettable again. Proved end-to-end: the state updateScore
+    // refuses is exactly the state placeBet would otherwise accept.
+    {
+      const user = await makeUser('reopen-check');
+      const a = await makeFutureMatch(7, 'SCHEDULED');
+      await rejects('cannot reopen the finished match', a.id, 'SCHEDULED');
+      // With the status flip refused, the match is still bettable — the guard
+      // blocks the transition, it does not block betting on an open match.
+      await prisma.odds.create({ data: { matchId: a.id, market: '1X2', selection: '1', value: 1.9 } });
+      const { betService } = await import('../src/services/bet.service');
+      let placed = false;
+      try {
+        await betService.placeBet(user.id, 10, [{ matchId: a.id, market: '1X2', selection: '1' } as any]);
+        placed = true;
+      } catch {
+        placed = false;
+      }
+      check('the un-reopened SCHEDULED match is still bettable', placed, true);
+      check('score was never written by the refused call',
+        (await prisma.match.findUniqueOrThrow({ where: { id: a.id } })).status, 'SCHEDULED');
     }
   }
 

@@ -69,8 +69,16 @@ export const createManualMatchSchema = z.object({
   matchDate: matchDateSchema,
 });
 
+// Recording a result means the match is being played or is over. SCHEDULED is
+// deliberately NOT here: it used to be accepted, which let a finished match be
+// flipped back to SCHEDULED through the score route and — because placeBet
+// only checks SCHEDULED plus a future kick-off — become bettable again.
+// POSTPONED/CANCELLED mean the event produced no result and arrive via the feed
+// (mapStatus), and VOID has its own route that must not be reachable from here.
+export const SCOREABLE_MATCH_STATUSES = ['FINISHED', 'LIVE'] as const;
+
 export const updateScoreSchema = z.object({
   homeScore: z.number().int().min(0),
   awayScore: z.number().int().min(0),
-  status: z.enum(['FINISHED', 'LIVE', 'SCHEDULED']).optional().default('FINISHED'),
+  status: z.enum(SCOREABLE_MATCH_STATUSES).optional().default('FINISHED'),
 });

@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma';
-import { env } from '../config/env';
+import { env, SCOREABLE_MATCH_STATUSES } from '../config/env';
 import { Prisma } from '@prisma/client';
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
@@ -236,6 +236,15 @@ export const matchService = {
   },
 
   async updateScore(id: string, data: { homeScore: number; awayScore: number; status: string }) {
+    // The zod schema already restricts status to LIVE/FINISHED, but this is the
+    // layer that actually writes the column, so it re-checks. Two reasons it
+    // must not accept anything else: SCHEDULED re-opens a finished match for
+    // betting (placeBet only requires SCHEDULED + a future matchDate), and VOID
+    // bypasses voidMatch(), which is the deliberate two-step for voiding.
+    if (!SCOREABLE_MATCH_STATUSES.includes(data.status as (typeof SCOREABLE_MATCH_STATUSES)[number])) {
+      throw new Error('Estado inválido para atualizar resultado');
+    }
+
     const existing = await prisma.match.findUnique({ where: { id }, select: { status: true } });
     if (!existing) throw new Error('Jogo não encontrado');
     // Scoring a voided match would silently re-admit it to accumulators. The

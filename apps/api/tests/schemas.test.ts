@@ -123,10 +123,33 @@ describe('Zod schemas', () => {
     expect(updateScoreSchema.safeParse({ homeScore: 1.5, awayScore: 0 }).success).toBe(false);
   });
 
-  it('updateScoreSchema accepts only known statuses', async () => {
+  it('updateScoreSchema accepts only statuses a score can be recorded on', async () => {
     const { updateScoreSchema } = await import('../src/config/env');
     expect(updateScoreSchema.safeParse({ homeScore: 0, awayScore: 0, status: 'LIVE' }).success).toBe(true);
-    expect(updateScoreSchema.safeParse({ homeScore: 0, awayScore: 0, status: 'SCHEDULED' }).success).toBe(true);
+    expect(updateScoreSchema.safeParse({ homeScore: 0, awayScore: 0, status: 'FINISHED' }).success).toBe(true);
+    expect(updateScoreSchema.safeParse({ homeScore: 0, awayScore: 0, status: 'SCHEDULED' }).success).toBe(false);
     expect(updateScoreSchema.safeParse({ homeScore: 0, awayScore: 0, status: 'CANCELLED' }).success).toBe(false);
+  });
+
+  it('updateScoreSchema rejects VOID, which has its own route', async () => {
+    const { updateScoreSchema } = await import('../src/config/env');
+    // voidMatch() is deliberately a separate two-step act; reaching VOID
+    // through the score route would skip the checks it performs.
+    expect(updateScoreSchema.safeParse({ homeScore: 0, awayScore: 0, status: 'VOID' }).success).toBe(false);
+  });
+});
+
+describe('SCOREABLE_MATCH_STATUSES', () => {
+  it('is exactly LIVE and FINISHED', async () => {
+    const { SCOREABLE_MATCH_STATUSES } = await import('../src/config/env');
+    expect([...SCOREABLE_MATCH_STATUSES].sort()).toEqual(['FINISHED', 'LIVE']);
+  });
+
+  it('excludes every status that would reopen a match or bypass a guard', async () => {
+    const { SCOREABLE_MATCH_STATUSES } = await import('../src/config/env');
+    const excluded = ['SCHEDULED', 'VOID', 'POSTPONED', 'CANCELLED'];
+    for (const status of excluded) {
+      expect(SCOREABLE_MATCH_STATUSES.includes(status as never)).toBe(false);
+    }
   });
 });
