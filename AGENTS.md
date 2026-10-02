@@ -31,6 +31,48 @@ docker-compose up -d       # Starts postgres, api (3001), web (5173)
 
 **No test framework is configured.** No `test` script exists in any `package.json`. No test files found.
 
+## Rularea testelor e2e
+
+Testul e2e (`apps/api/tests/e2e-settlement.ts`) rulează **doar pe PostgreSQL** și se va închide automat (cu un mesaj clar) dacă `DATABASE_URL` nu punctează la o bază a cărei nume conține `test` sau `_test`. Nu atinge baze de producție.
+
+### Cum creezi baza de test
+
+```sql
+CREATE DATABASE betleague_test;
+```
+
+### Cum rulezi e2e
+
+```powershell
+$env:DATABASE_URL="postgresql://USER:PAROLA@localhost:5432/betleague_test"
+npx prisma db push
+npx tsx tests/e2e-settlement.ts
+# sau, prin scriptul din package.json:
+npm run test:e2e
+```
+
+### Curățarea datelor de test
+
+Un e2e rulat lasă în urmă utilizatori (email `*@t.com`), meciuri (`H vs A`, ligă `L`, externalId `t-*`/`f-*`), bilete, selecții, cote și notificări. Testul curăță automat doar ceea ce a creat el însuși (în ordine: bilete → meciuri → utilizatori, profitând de cascade).
+
+Pentru datele deja rămase pe bază, rulează mai întâi **dry-run** (fără modificări):
+
+```powershell
+npm run cleanup:test-data
+```
+
+Afișează utilizatorii, meciurile și biletele de test identificate, precum și numărul de notificări cascade. Dacă există bilete ale utilizatorilor **non-test** pe meciuri de test, scriptul se oprește cu cod 1 (miza trebuie returnată manual).
+
+Pentru aplicare, confirmă exact numele bazei:
+
+```powershell
+npm run cleanup:test-data -- --apply --confirm-db=betleague_test
+```
+
+Totul se execută într-o singură tranzacție Prisma interactivă (bilete → meciuri → utilizatori), cu timeout generos.
+
+**Nu introduce niciodată parole reale în AGENTS.md** — folosește mereu `USER`/`PAROLA`.
+
 ## Architecture
 
 ### API (`apps/api`) — Express + Prisma + PostgreSQL

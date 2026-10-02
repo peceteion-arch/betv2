@@ -1,11 +1,18 @@
 // End-to-end settlement check against a real PostgreSQL instance.
-// Not part of `npm test` — run manually with a DATABASE_URL pointing at a
+// Not part of npm test — run manually with a DATABASE_URL pointing at a
 // throwaway database, because it needs a live DB. Verifies the money movement
 // that the pure unit tests cannot: balance increments, atomicity, and the
 // cancel/settlement race.
+import { assertTestDatabase } from './helpers/assertTestDatabase';
+assertTestDatabase();
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
+
+const createdUserIds: string[] = [];
+const createdMatchIds: string[] = [];
+const createdFutureMatchIds: string[] = [];
+const createdBetIds: string[] = [];
 
 const money = (d: unknown) => Number(d).toFixed(2);
 
@@ -17,27 +24,31 @@ function check(label: string, actual: unknown, expected: unknown) {
 }
 
 async function makeUser(name: string, balance = 100) {
-  return prisma.user.create({
+  const user = await prisma.user.create({
     data: { name, email: `${name}-${Date.now()}-${Math.random()}@t.com`, passwordHash: 'x', balance },
   });
+  createdUserIds.push(user.id);
+  return user;
 }
 
 async function makeMatch(status: string, home: number | null, away: number | null) {
-  return prisma.match.create({
+  const match = await prisma.match.create({
     data: {
       externalId: `t-${Date.now()}-${Math.random()}`,
       homeTeam: 'H', awayTeam: 'A', league: 'L', country: 'Manual',
       matchDate: new Date('2020-01-01'), status, homeScore: home, awayScore: away,
     },
   });
+  createdMatchIds.push(match.id);
+  return match;
 }
 
 // makeMatch always dates its match in the past, which is right for settlement
-// fixtures but disqualifies them from cancel(): a ticket can only be cancelled
+// but disqualifies them from cancel(): a ticket can only be cancelled
 // while every leg is SCHEDULED *and* still in the future, the same rule
 // placeBet applies. Cancellation fixtures need the other kind of match.
 async function makeFutureMatch(daysAhead = 7, status = 'SCHEDULED') {
-  return prisma.match.create({
+  const match = await prisma.match.create({
     data: {
       externalId: `f-${Date.now()}-${Math.random()}`,
       homeTeam: 'H', awayTeam: 'A', league: 'L', country: 'Manual',
@@ -45,6 +56,8 @@ async function makeFutureMatch(daysAhead = 7, status = 'SCHEDULED') {
       status, homeScore: null, awayScore: null,
     },
   });
+  createdFutureMatchIds.push(match.id);
+  return match;
 }
 
 // Places a bet directly so the fixture is independent of placeBet's validation.
@@ -52,18 +65,40 @@ async function placeBet(userId: string, stake: number, legs: Array<{ matchId: st
   return prisma.$transaction(async (tx) => {
     await tx.user.update({ where: { id: userId }, data: { balance: { decrement: stake } } });
     const totalOdds = Math.round(legs.reduce((a, s) => a * s.odds, 1) * 100) / 100;
-    return tx.bet.create({
+    const bet = await tx.bet.create({
       data: {
         userId, stake, totalOdds,
         potentialReturn: Math.round(stake * totalOdds * 100) / 100,
         selections: { create: legs },
       },
     });
+    createdBetIds.push(bet.id);
+    return bet;
   });
 }
 
 async function balanceOf(id: string) {
   return money((await prisma.user.findUniqueOrThrow({ where: { id } })).balance);
+}
+
+async function cleanup() {
+  console.log('\n=== Cleaning up created test data ===');
+  const matchIds = [...createdMatchIds, ...createdFutureMatchIds];
+
+  // Each step on its own, so one failure cannot skip the rest.
+  const step = async (label: string, fn: () => Promise<{ count: number }>) => {
+    try {
+      console.log(`Deleted ${(await fn()).count} ${label}`);
+    } catch (e) {
+      console.error(`Cleanup step failed (${label}):`, e);
+    }
+  };
+
+  // All tickets of the test users, including those placed through
+  // betService.placeBet, which are not tracked in createdBetIds.
+  await step('tickets', () => prisma.bet.deleteMany({ where: { userId: { in: createdUserIds } } }));
+  await step('matches', () => prisma.match.deleteMany({ where: { id: { in: matchIds } } }));
+  await step('users', () => prisma.user.deleteMany({ where: { id: { in: createdUserIds } } }));
 }
 
 async function main() {
@@ -257,11 +292,10 @@ async function main() {
     check('unvoid returns it to SCHEDULED', (await prisma.match.findUniqueOrThrow({ where: { id: a.id } })).status, 'SCHEDULED');
   }
 
-  console.log('\n=== 10. Rounding invariant: stake * totalOdds ===');
+  console.log('\n=== 10. Rounding invariant: stake * totalOdds === payout ===');
   {
     const user = await makeUser('rounding');
-    // placeBet requires SCHEDULED matches with a future date and real Odds
-    // rows, so set those up rather than bypassing it.
+    // placeBet requires SCHEDULED matches with a future date and real Odds rows, so set those up rather than bypassing it.
     const future = new Date(Date.now() + 86_400_000);
     const a = await prisma.match.create({
       data: { externalId: `r-${Date.now()}-a`, homeTeam: 'H', awayTeam: 'A', league: 'L', country: 'Manual', matchDate: future, status: 'SCHEDULED' },
@@ -269,11 +303,8 @@ async function main() {
     const b = await prisma.match.create({
       data: { externalId: `r-${Date.now()}-b`, homeTeam: 'H2', awayTeam: 'A2', league: 'L', country: 'Manual', matchDate: future, status: 'SCHEDULED' },
     });
-    // Odds.value is Decimal(10,2), so the DB stores 2-decimal prices (1.955
-    // would be persisted as 1.96). Use 2-decimal legs, which is what real odds
-    // look like, and assert the invariant that matters: the stored payout
-    // equals stake * the STORED (rounded) total odds, not a figure derived
-    // from unrounded intermediates.
+    createdMatchIds.push(a.id, b.id);
+    // Odds.value is Decimal(10,2), so the DB stores 2-decimal prices (1.955 would be persisted as 1.96). Use 2-decimal legs, which is what real odds look like, and assert the invariant that matters: the stored payout equals stake * the STORED (rounded) total odds, not a figure derived from unrounded intermediates.
     await prisma.odds.create({ data: { matchId: a.id, market: '1X2', selection: '1', value: 1.95 } });
     await prisma.odds.create({ data: { matchId: b.id, market: '1X2', selection: '1', value: 1.87 } });
 
@@ -301,8 +332,7 @@ async function main() {
   {
     const { betService } = await import('../src/services/bet.service');
 
-    // 11a. All legs SCHEDULED and in the future -> the ticket is cancellable and
-    // the stake comes back in full.
+    // 11a. All legs SCHEDULED and in the future -> the ticket is cancellable and the stake comes back in full.
     {
       const user = await makeUser('cancel-ok');
       const a = await makeFutureMatch(7);
@@ -399,8 +429,7 @@ async function main() {
     // turn the ticket LOST on the lost leg alone — without that, the ticket
     // stays PENDING, cancel() refuses it (the finished leg), and the money
     // stays correctly tied up either way. Both halves are asserted because
-    // either one alone leaves the ticket in a state the user can exploit or
-    // lose money on.
+    // either one alone leaves the ticket in a state the user can exploit or lose money on.
     {
       const user = await makeUser('lost-then-cancel');
       const a = await makeMatch('FINISHED', 1, 3);   // Canada vs Mexico, home leg lost
@@ -411,8 +440,7 @@ async function main() {
       ]);
       const bet = await prisma.bet.findFirstOrThrow({ where: { userId: user.id } });
 
-      // Before settlement: the ticket is still PENDING, so cancel() — not
-      // settlement — is what must keep the money away from the bettor.
+      // Before settlement: the ticket is still PENDING, so cancel() — not settlement — is what must keep the money away from the bettor.
       let earlyThrew = false;
       try {
         await betService.cancel(bet.id, user.id);
@@ -500,8 +528,7 @@ async function main() {
       check('score not overwritten', [after.homeScore, after.awayScore], [3, 0]);
     }
 
-    // 12c. POSTPONED and CANCELLED mean the event produced no result; they
-    // arrive from the feed via mapStatus, not from a manual score entry.
+    // 12c. POSTPONED and CANCELLED mean the event produced no result; they arrive from the feed via mapStatus, not from a manual score entry.
     {
       const a = await makeMatch('SCHEDULED', null, null);
       await rejects('POSTPONED refused', a.id, 'POSTPONED');
@@ -520,8 +547,7 @@ async function main() {
       check('VOID did not gain a score', [after.homeScore, after.awayScore], [null, null]);
     }
 
-    // 12e. LIVE and FINISHED are both accepted — recording a running score and
-    // recording the final one are the two legitimate uses.
+    // 12e. LIVE and FINISHED are both accepted — recording a running score and recording the final one are the two legitimate uses.
     {
       const a = await makeMatch('LIVE', 1, 0);
       const updated = await matchService.updateScore(a.id, { homeScore: 2, awayScore: 1, status: 'FINISHED' });
@@ -534,15 +560,12 @@ async function main() {
       check('running score stored', [live?.homeScore, live?.awayScore], [0, 0]);
     }
 
-    // 12f. A FINISHED match with a future matchDate and status flipped back to
-    // SCHEDULED would be bettable again. Proved end-to-end: the state updateScore
-    // refuses is exactly the state placeBet would otherwise accept.
+    // 12f. A FINISHED match with a future matchDate and status flipped back to SCHEDULED would be bettable again. Proved end-to-end: the state updateScore refuses is exactly the state placeBet would otherwise accept.
     {
       const user = await makeUser('reopen-check');
       const a = await makeFutureMatch(7, 'SCHEDULED');
       await rejects('cannot reopen the finished match', a.id, 'SCHEDULED');
-      // With the status flip refused, the match is still bettable — the guard
-      // blocks the transition, it does not block betting on an open match.
+      // With the status flip refused, the match is still bettable — the guard blocks the transition, it does not block betting on an open match.
       await prisma.odds.create({ data: { matchId: a.id, market: '1X2', selection: '1', value: 1.9 } });
       const { betService } = await import('../src/services/bet.service');
       let placed = false;
@@ -564,4 +587,7 @@ async function main() {
 
 main()
   .catch((e) => { console.error(e); process.exitCode = 1; })
-  .finally(() => prisma.$disconnect());
+  .finally(async () => {
+    await cleanup();
+    await prisma.$disconnect();
+  });

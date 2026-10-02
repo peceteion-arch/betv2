@@ -13,3 +13,5 @@ backups/
 apps/api/dev.db
 apps/api/prisma/dev.db
 .turbo/
+
+*.sql
