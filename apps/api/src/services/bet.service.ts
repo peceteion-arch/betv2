@@ -60,11 +60,11 @@ export const betService = {
 
       for (const s of selections) {
         // Re-fetch match inside transaction
-        const match = await tx.match.findUnique({ where: { id: s.matchId } });
+        const match = await tx.match.findUnique({ where: { id: s.matchId }, include: { homeTeam: true, awayTeam: true, competition: true } });
         if (!match) throw new Error(`Match not found: ${s.matchId}`);
-        if (match.status !== 'SCHEDULED') throw new Error(`Jogo ${match.homeTeam} vs ${match.awayTeam} não está disponível para apostas`);
+        if (match.status !== 'SCHEDULED') throw new Error(`Jogo ${match.homeTeam?.name ?? 'Unknown Team'} vs ${match.awayTeam?.name ?? 'Unknown Team'} não está disponível para apostas`);
         if (new Date(match.matchDate).getTime() <= Date.now()) {
-          throw new Error(`Jogo ${match.homeTeam} vs ${match.awayTeam} já começou — apostas encerradas`);
+          throw new Error(`Jogo ${match.homeTeam?.name ?? 'Unknown Team'} vs ${match.awayTeam?.name ?? 'Unknown Team'} já começou — apostas encerradas`);
         }
 
         // Re-fetch odds inside transaction
@@ -108,7 +108,7 @@ export const betService = {
             })),
           },
         },
-        include: { selections: { include: { match: true } } },
+        include: { selections: { include: { match: { include: { homeTeam: true, awayTeam: true, competition: true } } } } },
       });
     });
 
@@ -125,7 +125,7 @@ export const betService = {
     const query: Prisma.BetFindManyArgs = {
       where,
       include: {
-        selections: { include: { match: true } },
+        selections: { include: { match: { include: { homeTeam: true, awayTeam: true, competition: true } } } },
       },
       orderBy: { createdAt: 'desc' },
       take: limit + 1,
@@ -150,7 +150,7 @@ export const betService = {
     const bet = await prisma.bet.findUnique({
       where: { id: betId },
       include: {
-        selections: { include: { match: true } },
+        selections: { include: { match: { include: { homeTeam: true, awayTeam: true, competition: true } } } },
         user: { select: { id: true, name: true } },
       },
     });

@@ -41,7 +41,6 @@ interface AdminMatch {
   status: string;
   homeScore: number | null;
   awayScore: number | null;
-  country: string;
   odds: any[];
 }
 
@@ -56,9 +55,11 @@ export default function Admin() {
   const [error, setError] = useState('');
   const [matches, setMatches] = useState<AdminMatch[]>([]);
   const [matchForm, setMatchForm] = useState({
-    homeTeam: '', awayTeam: '',
-    league: 'Minifotbal', matchDate: ''
+    homeTeamId: '', awayTeamId: '',
+    competitionId: '', league: '', matchDate: '', matchday: '1'
   });
+  const [teamMap, setTeamMap] = useState<Record<string, string>>({});
+  const [competitionMap, setCompetitionMap] = useState<Record<string, string>>({});
   const [scoreEdit, setScoreEdit] = useState<{
     matchId: string; homeScore: string; awayScore: string
   } | null>(null);
@@ -75,6 +76,20 @@ export default function Admin() {
   useEffect(() => {
     if (user?.role !== 'ADMIN' || tab !== 'meciuri') return;
     api.get('/matches/all').then((r) => setMatches(r.data));
+    api.get('/teams').then((r) => {
+      const teamMap: Record<string, string> = {};
+      r.data.forEach((t: any) => {
+        teamMap[t.id] = t.name;
+      });
+      setTeamMap(teamMap);
+    });
+    api.get('/competitions').then((r) => {
+      const competitionMap: Record<string, string> = {};
+      r.data.forEach((c: any) => {
+        competitionMap[c.id] = c.name;
+      });
+      setCompetitionMap(competitionMap);
+    });
   }, [user, tab]);
 
   if (user?.role !== 'ADMIN') {
@@ -130,9 +145,24 @@ export default function Admin() {
     setMatchError('');
     setMatchLoading(true);
     try {
-      const r = await api.post('/matches/manual', matchForm);
+      // Validate required fields
+      if (!matchForm.homeTeamId || !matchForm.awayTeamId || !matchForm.competitionId || !matchForm.matchDate || !matchForm.matchday) {
+        setMatchError('Toate câmpurile sunt obligatorii');
+        return;
+      }
+      const matchdayNum = Number(matchForm.matchday);
+      if (isNaN(matchdayNum) || matchdayNum < 1) {
+        setMatchError('Etapa trebuie să fie un număr întreg pozitiv');
+        return;
+      }
+
+      const matchData = {
+        ...matchForm,
+        matchday: matchdayNum,
+      };
+      const r = await api.post('/matches/manual', matchData);
       setMatches((prev) => [r.data, ...prev]);
-      setMatchForm({ homeTeam: '', awayTeam: '', league: 'Minifotbal', matchDate: '' });
+      setMatchForm({ homeTeamId: '', awayTeamId: '', competitionId: '', matchDate: '', matchday: '1' });
     } catch (err: any) {
       setMatchError(err.response?.data?.error || 'Erro ao criar jogo');
     } finally {
@@ -341,24 +371,69 @@ export default function Admin() {
             <h3 className="font-bold text-sm">Adicionar Jogo Manual</h3>
             {matchError && <p className="text-neon-red text-sm">{matchError}</p>}
             <div className="grid grid-cols-2 gap-3">
-              <input
-                className="input-bet"
-                placeholder="Casa (ex: FC Nando)"
-                value={matchForm.homeTeam}
-                onChange={(e) => setMatchForm({ ...matchForm, homeTeam: e.target.value })}
-              />
-              <input
-                className="input-bet"
-                placeholder="Fora (ex: Sporting Galați)"
-                value={matchForm.awayTeam}
-                onChange={(e) => setMatchForm({ ...matchForm, awayTeam: e.target.value })}
-              />
-              <input
-                className="input-bet"
-                placeholder="Liga"
-                value={matchForm.league}
-                onChange={(e) => setMatchForm({ ...matchForm, league: e.target.value })}
-              />
+              <div>
+                <input
+                  className="input-bet"
+                  list="homeTeamList"
+                  placeholder="Casa (ex: FC Nando)"
+                  value={matchForm.homeTeamId}
+                  onChange={(e) => setMatchForm({ ...matchForm, homeTeamId: e.target.value })}
+                />
+                <datalist id="homeTeamList">
+                  {Object.entries(teamMap).map(([id, name]) => (
+                    <option key={id} value={id}>{name}</option>
+                  ))}
+                </datalist>
+              </div>
+              <div>
+                <input
+                  className="input-bet"
+                  list="awayTeamList"
+                  placeholder="Fora (ex: Sporting Galați)"
+                  value={matchForm.awayTeamId}
+                  onChange={(e) => setMatchForm({ ...matchForm, awayTeamId: e.target.value })}
+                />
+                <datalist id="awayTeamList">
+                  {Object.entries(teamMap).map(([id, name]) => (
+                    <option key={id} value={id}>{name}</option>
+                  ))}
+                </datalist>
+              </div>
+              <div>
+                <div className="relative">
+                  <input
+                    className="input-bet"
+                    list="competitionList"
+                    placeholder="Liga (ex: Minifotbal) sau scrie orice nume"
+                    value={matchForm.competitionId || matchForm.league || ''}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      // Check if it's an existing competition ID
+                      if (competitionMap[val]) {
+                        setMatchForm({ ...matchForm, competitionId: val, league: '' });
+                      } else {
+                        // Treat as league name
+                        setMatchForm({ ...matchForm, competitionId: '', league: val });
+                      }
+                    }}
+                  />
+                  <datalist id="competitionList">
+                    {Object.entries(competitionMap).map(([id, name]) => (
+                      <option key={id} value={id}>{name}</option>
+                    ))}
+                  </datalist>
+                </div>
+              </div>
+              <div>
+                <input
+                  className="input-bet"
+                  type="number"
+                  placeholder="Etapă"
+                  min="1"
+                  value={matchForm.matchday}
+                  onChange={(e) => setMatchForm({ ...matchForm, matchday: e.target.value })}
+                />
+              </div>
               <input
                 className="input-bet"
                 type="datetime-local"
@@ -393,9 +468,6 @@ export default function Admin() {
                   <tr key={match.id} className="border-b border-bet-700 hover:bg-bet-700/50">
                     <td className="p-3 text-sm">
                       {match.homeTeam} vs {match.awayTeam}
-                      {match.country === 'Manual' && (
-                        <span className="text-[9px] bg-neon-blue/20 text-neon-blue px-1 rounded ml-1">MANUAL</span>
-                      )}
                     </td>
                     <td className="p-3 text-xs text-gray-400">{match.league}</td>
                     <td className="p-3 text-xs text-gray-400">{new Date(match.matchDate).toLocaleString('pt-PT', { timeZone: 'Europe/Bucharest' })}</td>
@@ -472,14 +544,6 @@ export default function Admin() {
                               Marcar VOID
                             </button>
                           </>
-                        )}
-                        {match.country === 'Manual' && (
-                          <button
-                            onClick={() => handleDeleteMatch(match.id)}
-                            className="text-[10px] text-neon-red hover:underline"
-                          >
-                            Eliminar
-                          </button>
                         )}
                       </div>
                     </td>

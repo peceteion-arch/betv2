@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { env, SCOREABLE_MATCH_STATUSES } from '../config/env';
 import { Prisma } from '@prisma/client';
+import { serializeMatch } from '../lib/match.serializer';
 
 // Odds.value is @db.Decimal, so Prisma hands it back as a Decimal that
 // serialises to a JSON string ("1.90"). The UI calls .toFixed() on it, which
@@ -9,22 +10,6 @@ import { Prisma } from '@prisma/client';
 // the same field.
 const mapOdds = (odds: any[]) =>
   odds.map((o) => ({ ...o, value: Number(o.value) }));
-
-export interface FootballMatch {
-  externalId: string;
-  homeTeam: string;
-  awayTeam: string;
-  homeCrest?: string;
-  awayCrest?: string;
-  league: string;
-  country: string;
-  matchday?: number;
-  groupStage?: string;
-  matchDate: Date;
-  status: string;
-  homeScore?: number;
-  awayScore?: number;
-}
 
 export const matchService = {
 
@@ -46,12 +31,12 @@ export const matchService = {
     const now = new Date();
     // Typed with its return type rather than Prisma.MatchFindManyArgs so the
     // `include` survives inference and `odds` is visible on each match.
-    const query: Prisma.MatchFindManyArgs & { include: { odds: true } } = {
+    const query: Prisma.MatchFindManyArgs & { include: { odds: true, homeTeam: true, awayTeam: true, competition: true } } = {
       where: {
         matchDate: { gte: now },
         status: 'SCHEDULED',
       },
-      include: { odds: true },
+      include: { odds: true, homeTeam: true, awayTeam: true, competition: true },
       orderBy: { matchDate: 'asc' },
       take: limit + 1,
     };
@@ -64,7 +49,7 @@ export const matchService = {
     const matches = await prisma.match.findMany(query);
     const hasMore = matches.length > limit;
     const items = (hasMore ? matches.slice(0, limit) : matches).map((m) => ({
-      ...m,
+      ...serializeMatch(m),
       odds: mapOdds(m.odds),
     }));
 
@@ -83,41 +68,84 @@ export const matchService = {
           { AND: [{ status: 'SCHEDULED' }, { matchDate: { lte: now } }] },
         ],
       },
-      include: { odds: true },
+      include: { odds: true, homeTeam: true, awayTeam: true, competition: true },
       orderBy: { matchDate: 'desc' },
       take: limit,
     });
-    return matches.map((m) => ({ ...m, odds: mapOdds(m.odds) }));
+    return matches.map((m) => ({
+      ...serializeMatch(m),
+      odds: mapOdds(m.odds),
+    }));
   },
 
   async getById(id: string) {
     const match = await prisma.match.findUnique({
       where: { id },
-      include: { odds: true },
+      include: { odds: true, homeTeam: true, awayTeam: true, competition: true },
     });
     if (!match) throw new Error('Match not found');
-    return { ...match, odds: mapOdds(match.odds) };
+    return { ...serializeMatch(match), odds: mapOdds(match.odds) };
   },
 
   // Admin panel listing: every match regardless of status, no pagination.
   async listAll() {
     const matches = await prisma.match.findMany({
-      include: { odds: true },
+      include: { odds: true, homeTeam: true, awayTeam: true, competition: true },
       orderBy: { matchDate: 'desc' },
     });
-    return matches.map((m) => ({ ...m, odds: mapOdds(m.odds) }));
+    return matches.map((m) => ({
+      ...serializeMatch(m),
+      odds: mapOdds(m.odds),
+    }));
   },
 
   async createManual(data: {
-    homeTeam: string;
-    awayTeam: string;
-    league: string;
+    homeTeamId: string;
+    awayTeamId: string;
+    competitionId?: string;
+    league?: string;
+    matchday: number;
     matchDate: string;
   }) {
+    // Validate: teams must be different
+    if (data.homeTeamId === data.awayTeamId) {
+      throw new Error('Home and away teams must be different');
+    }
+
+    // Validate: at least one of competitionId or league is provided
+    if (!data.competitionId && !data.league) {
+      throw new Error('Either competitionId or league must be provided');
+    }
+
+    // Validate: if competitionId is provided, ensure it exists
+    let competition = null;
+    if (data.competitionId) {
+      competition = await prisma.competition.findUnique({
+        where: { id: data.competitionId },
+      });
+      if (!competition) {
+        throw new Error(`Competition not found: ${data.competitionId}`);
+      }
+    }
+
+    // Validate: teams exist
+    const [homeTeam, awayTeam] = await prisma.$transaction([
+      prisma.team.findUnique({ where: { id: data.homeTeamId } }),
+      prisma.team.findUnique({ where: { id: data.awayTeamId } }),
+    ]);
+
+    if (!homeTeam) throw new Error(`Home team not found: ${data.homeTeamId}`);
+    if (!awayTeam) throw new Error(`Away team not found: ${data.awayTeamId}`);
+
+    // Validate matchday >= 1
+    if (data.matchday < 1) {
+      throw new Error('Matchday must be at least 1');
+    }
+
     // Timestamp suffix keeps externalId unique so the same pairing can be
     // scheduled twice on different dates.
     const slug = (s: string) => s.toLowerCase().replace(/\s+/g, '-');
-    const externalId = `manual-${slug(data.homeTeam)}-${slug(data.awayTeam)}-${Date.now()}`;
+    const externalId = `manual-${slug(homeTeam.name)}-${slug(awayTeam.name)}-${Date.now()}`;
 
     // Explicitly interpret the admin-entered datetime-local value as
     // Europe/Bucharest and store the corresponding UTC instant.
@@ -128,15 +156,16 @@ export const matchService = {
 
     const newMatch = await prisma.match.create({
       data: {
-        homeTeam: data.homeTeam,
-        awayTeam: data.awayTeam,
-        league: data.league,
-        country: 'Manual',
+        externalId,
+        homeTeamId: data.homeTeamId,
+        awayTeamId: data.awayTeamId,
+        competitionId: data.competitionId ?? null,
+        league: data.league ?? null,
+        matchday: data.matchday,
         matchDate: utcMatchDate,
         status: 'SCHEDULED',
-        externalId,
-        homeCrest: null,
-        awayCrest: null,
+        // homeCrest and awayCrest are removed; they are now derived from teams
+        // league: if provided, stored directly; else derived from competition (if any)
       },
     });
 
@@ -144,9 +173,9 @@ export const matchService = {
 
     const created = await prisma.match.findUnique({
       where: { id: newMatch.id },
-      include: { odds: true },
+      include: { odds: true, homeTeam: true, awayTeam: true, competition: true },
     });
-    return created && { ...created, odds: mapOdds(created.odds) };
+    return created && { ...serializeMatch(created), odds: mapOdds(created.odds) };
   },
 
   async updateScore(id: string, data: { homeScore: number; awayScore: number; status: string }) {
@@ -174,9 +203,9 @@ export const matchService = {
 
     const updated = await prisma.match.findUnique({
       where: { id },
-      include: { odds: true },
+      include: { odds: true, homeTeam: true, awayTeam: true, competition: true },
     });
-    return updated && { ...updated, odds: mapOdds(updated.odds) };
+    return updated && { ...serializeMatch(updated), odds: mapOdds(updated.odds) };
   },
 
   // Admin marks an event as void. This is NOT a 0-0 result and NOT a
@@ -198,10 +227,10 @@ export const matchService = {
 
     const updatedWithOdds = await prisma.match.findUnique({
       where: { id },
-      include: { odds: true },
+      include: { odds: true, homeTeam: true, awayTeam: true, competition: true },
     });
     if (!updatedWithOdds) throw new Error('Jogo não encontrado após atualização');
-    return { ...updatedWithOdds, odds: mapOdds(updatedWithOdds.odds) };
+    return { ...serializeMatch(updatedWithOdds), odds: mapOdds(updatedWithOdds.odds) };
   },
 
   // Clears a void so the match can be scored normally again. Without this an
@@ -221,10 +250,10 @@ export const matchService = {
 
     const updatedWithOdds = await prisma.match.findUnique({
       where: { id },
-      include: { odds: true },
+      include: { odds: true, homeTeam: true, awayTeam: true, competition: true },
     });
     if (!updatedWithOdds) throw new Error('Jogo não encontrado após atualização');
-    return { ...updatedWithOdds, odds: mapOdds(updatedWithOdds.odds) };
+    return { ...serializeMatch(updatedWithOdds), odds: mapOdds(updatedWithOdds.odds) };
   },
 
   // Refuses to delete a match that already has bets on it, so settled history

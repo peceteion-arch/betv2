@@ -14,15 +14,19 @@ export function isTestUserEmail(email: string): boolean {
  *   f-*  makeFutureMatch()  H vs A
  *   r-*  section 10         H vs A and H2 vs A2
  * All use league 'L' and country 'Manual'.
+ * Since league and country columns are removed, we identify test matches by:
+ *   - externalId prefix t-, f-, r-
+ *   - competition name being exactly 'L'
+ *   - team names being exactly H vs A or H2 vs A2
  */
 export function isTestMatch(m: {
-  homeTeam: string;
-  awayTeam: string;
-  league: string;
   externalId: string;
+  competition: { name: string };
+  homeTeam: { name: string };
+  awayTeam: { name: string };
 }): boolean {
-  if (m.league !== 'L') return false;
   if (!/^[tfr]-/.test(m.externalId)) return false;
-  const teams = `${m.homeTeam}|${m.awayTeam}`;
+  if (m.competition.name !== 'L') return false;
+  const teams = `${m.homeTeam.name}|${m.awayTeam.name}`;
   return teams === 'H|A' || teams === 'H2|A2';
 }

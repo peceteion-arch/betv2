@@ -60,14 +60,11 @@ model GroupMember {
 model Match {
   id            String      @id @default(cuid())
   externalId    String      @unique @map("external_id")
-  homeTeam      String      @map("home_team")
-  awayTeam      String      @map("away_team")
-  homeCrest     String?     @map("home_crest")
-  awayCrest     String?     @map("away_crest")
-  league        String
-  country       String
-  matchday      Int?
-  groupStage    String?     @map("group_stage")
+  homeTeamId    String      @map("home_team_id")
+  awayTeamId    String      @map("away_team_id")
+  competitionId String?      @map("competition_id")
+  league        String?
+  matchday      Int
   matchDate     DateTime    @map("match_date")
   status        String      @default("SCHEDULED")
   previousStatus String?   @map("previous_status")
@@ -77,11 +74,18 @@ model Match {
   halfTimeAway  Int?        @map("half_time_away")
   updatedAt     DateTime    @updatedAt @map("updated_at")
 
+  homeTeam      Team        @relation("HomeTeam", fields: [homeTeamId], references: [id], onDelete: Restrict)
+  awayTeam      Team        @relation("AwayTeam", fields: [awayTeamId], references: [id], onDelete: Restrict)
+  competition   Competition @relation("CompetitionMatches", fields: [competitionId], references: [id], onDelete: Restrict)
+
   odds          Odds[]
   betSelections BetSelection[]
 
   @@index([status])
   @@index([matchDate])
+  @@index([competitionId, matchday])
+  @@index([homeTeamId])
+  @@index([awayTeamId])
   @@map("matches")
 }
 
@@ -156,6 +160,9 @@ model Team {
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
+  homeMatches   Match[] @relation("HomeTeam")
+  awayMatches   Match[] @relation("AwayTeam")
+
   @@map("teams")
 }
 
@@ -166,6 +173,8 @@ model Competition {
   logoUrl       String?
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  matches       Match[] @relation("CompetitionMatches")
 
   @@map("competitions")
 }

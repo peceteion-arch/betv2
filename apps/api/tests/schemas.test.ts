@@ -48,25 +48,25 @@ describe('Zod schemas', () => {
   it('createManualMatchSchema validates correct data', async () => {
     const { createManualMatchSchema } = await import('../src/config/env');
     const result = createManualMatchSchema.safeParse({
-      homeTeam: 'FC Nando',
-      awayTeam: 'Sporting Galati',
-      league: 'Minifotbal',
+      homeTeamId: 't1',
+      awayTeamId: 't2',
+      competitionId: 'c1',
+      matchday: 1,
       matchDate: '2026-10-01T20:00:00.000Z',
     });
     expect(result.success).toBe(true);
   });
 
-  it('createManualMatchSchema defaults league to Minifotbal', async () => {
+  it('createManualMatchSchema rejects missing fields', async () => {
     const { createManualMatchSchema } = await import('../src/config/env');
-    const result = createManualMatchSchema.safeParse({
-      homeTeam: 'FC Nando',
-      awayTeam: 'Sporting Galati',
-      matchDate: '2026-10-01T20:00:00.000Z',
-    });
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.league).toBe('Minifotbal');
-    }
+    expect(
+      createManualMatchSchema.safeParse({
+        homeTeamId: 't1',
+        awayTeamId: 't2',
+        competitionId: 'c1',
+        matchday: 1,
+      }).success,
+    ).toBe(false);
   });
 
   // The admin form uses <input type="datetime-local">, which submits
@@ -75,9 +75,10 @@ describe('Zod schemas', () => {
   it('createManualMatchSchema accepts a naive datetime-local value', async () => {
     const { createManualMatchSchema } = await import('../src/config/env');
     const result = createManualMatchSchema.safeParse({
-      homeTeam: 'FC Nando',
-      awayTeam: 'Sporting Galati',
-      league: 'Minifotbal',
+      homeTeamId: 't1',
+      awayTeamId: 't2',
+      competitionId: 'c1',
+      matchday: 1,
       matchDate: '2026-10-01T20:00',
     });
     expect(result.success).toBe(true);
@@ -86,26 +87,13 @@ describe('Zod schemas', () => {
   it('createManualMatchSchema rejects an unparseable date', async () => {
     const { createManualMatchSchema } = await import('../src/config/env');
     const result = createManualMatchSchema.safeParse({
-      homeTeam: 'FC Nando',
-      awayTeam: 'Sporting Galati',
-      league: 'Minifotbal',
+      homeTeamId: 't1',
+      awayTeamId: 't2',
+      competitionId: 'c1',
+      matchday: 1,
       matchDate: 'nao-e-uma-data',
     });
     expect(result.success).toBe(false);
-  });
-
-  it('createManualMatchSchema rejects team names outside 2-50 chars', async () => {
-    const { createManualMatchSchema } = await import('../src/config/env');
-    expect(
-      createManualMatchSchema.safeParse({
-        homeTeam: 'F', awayTeam: 'Sporting Galati', matchDate: '2026-10-01T20:00',
-      }).success,
-    ).toBe(false);
-    expect(
-      createManualMatchSchema.safeParse({
-        homeTeam: 'F'.repeat(51), awayTeam: 'Sporting Galati', matchDate: '2026-10-01T20:00',
-      }).success,
-    ).toBe(false);
   });
 
   it('updateScoreSchema validates correct data', async () => {

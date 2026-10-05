@@ -11,6 +11,8 @@ import betRoutes from './routes/bet.routes';
 import rankingRoutes from './routes/ranking.routes';
 import notificationRoutes from './routes/notification.routes';
 import adminRoutes from './routes/admin.routes';
+import teamRoutes from './routes/team.routes';
+import competitionRoutes from './routes/competition.routes';
 import { matchService } from './services/match.service';
 import { betService } from './services/bet.service';
 import { env } from './config/env';
@@ -61,6 +63,8 @@ app.use('/api/bets', betRoutes);
 app.use('/api/rankings', rankingRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/teams', teamRoutes);
+app.use('/api/competitions', competitionRoutes);
 
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.get('/api/health', (_req, res) => {

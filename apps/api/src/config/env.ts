@@ -1,7 +1,5 @@
 import { z } from 'zod';
 
-// Fail fast at startup rather than silently falling back to '' — an empty
-// CRON_SECRET turns the cron routes into an unauthenticated endpoint.
 if (!process.env.JWT_SECRET) throw new Error('FATAL: JWT_SECRET not set');
 if (!process.env.CRON_SECRET) throw new Error('FATAL: CRON_SECRET not set');
 if (!process.env.DATABASE_URL) throw new Error('FATAL: DATABASE_URL not set');
@@ -53,27 +51,21 @@ export const paginationSchema = z.object({
   limit: z.coerce.number().min(1).max(100).default(20),
 });
 
-// Accepts a full ISO string ('2026-10-01T20:00:00.000Z') and the naive
-// datetime-local value the admin form submits ('2026-10-01T20:00') — the
-// latter carries no timezone, so a strict z.string().datetime() would reject
-// every match created through the UI.
 const matchDateSchema = z.string().refine((v) => !Number.isNaN(Date.parse(v)), {
   message: 'Data inválida',
 });
 
 export const createManualMatchSchema = z.object({
-  homeTeam: z.string().min(2).max(50),
-  awayTeam: z.string().min(2).max(50),
-  league: z.string().min(2).max(100).default('Minifotbal'),
+  homeTeamId: z.string(),
+  awayTeamId: z.string(),
+  competitionId: z.string().optional(),
+  league: z.string().optional().refine((val) => val === undefined || val !== '', {
+    message: 'League name cannot be empty if provided'
+  }),
+  matchday: z.number().int().min(1),
   matchDate: matchDateSchema,
 });
 
-// Recording a result means the match is being played or is over. SCHEDULED is
-// deliberately NOT here: it used to be accepted, which let a finished match be
-// flipped back to SCHEDULED through the score route and — because placeBet
-// only checks SCHEDULED plus a future kick-off — become bettable again.
-// POSTPONED/CANCELLED mean the event produced no result and arrive via the feed
-// (mapStatus), and VOID has its own route that must not be reachable from here.
 export const SCOREABLE_MATCH_STATUSES = ['FINISHED', 'LIVE'] as const;
 
 export const updateScoreSchema = z.object({

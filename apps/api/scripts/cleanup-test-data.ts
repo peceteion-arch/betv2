@@ -50,16 +50,22 @@ async function main() {
   const matches = (
     await prisma.match.findMany({
       where: {
-        league: 'L',
         OR: [
           { externalId: { startsWith: 't-' } },
           { externalId: { startsWith: 'f-' } },
           { externalId: { startsWith: 'r-' } },
         ],
       },
-      select: { id: true, homeTeam: true, awayTeam: true, league: true, externalId: true, status: true, matchDate: true },
+      select: { 
+        id: true, 
+        homeTeam: { select: { name: true } }, 
+        awayTeam: { select: { name: true } }, 
+        externalId: true, 
+        status: true, 
+        matchDate: true 
+      },
     })
-  ).filter(isTestMatch);
+  );
 
   const userIds = users.map((u) => u.id);
   const matchIds = matches.map((m) => m.id);
@@ -68,7 +74,7 @@ async function main() {
   for (const u of users) console.log(`  - ${u.id}  ${u.name}  ${u.email}`);
   console.log(`Test matches: ${matches.length}`);
   for (const m of matches) {
-    console.log(`  - ${m.id}  ${m.homeTeam} vs ${m.awayTeam}  ${m.status}  ${m.matchDate.toISOString()}  ${m.externalId}`);
+    console.log(`  - ${m.id}  ${m.homeTeam.name} vs ${m.awayTeam.name}  ${m.status}  ${m.matchDate.toISOString()}  ${m.externalId}`);
   }
 
   // ---- Bets involved ----

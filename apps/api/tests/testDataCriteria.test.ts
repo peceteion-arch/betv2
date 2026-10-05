@@ -1,7 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import { isTestUserEmail, isTestMatch } from '../scripts/testDataCriteria';
 
-const base = { homeTeam: 'H', awayTeam: 'A', league: 'L', externalId: 't-1700000000-0.5' };
+const base = { 
+  homeTeam: { name: 'H' }, 
+  awayTeam: { name: 'A' }, 
+  competition: { name: 'L' }, 
+  externalId: 't-1700000000-0.5' 
+};
 
 describe('isTestUserEmail', () => {
   it('matches only the @t.com test domain', () => {
@@ -18,14 +23,14 @@ describe('isTestMatch', () => {
     expect(isTestMatch(base)).toBe(true);
     expect(isTestMatch({ ...base, externalId: 'f-1-0.1' })).toBe(true);
     expect(isTestMatch({ ...base, externalId: 'r-1-a' })).toBe(true);
-    expect(isTestMatch({ ...base, homeTeam: 'H2', awayTeam: 'A2', externalId: 'r-1-b' })).toBe(true);
+    expect(isTestMatch({ ...base, homeTeam: { name: 'H2' }, awayTeam: { name: 'A2' }, externalId: 'r-1-b' })).toBe(true);
   });
 
   it('never matches real-looking matches', () => {
-    expect(isTestMatch({ ...base, league: 'Minifotbal' })).toBe(false);
+    expect(isTestMatch({ ...base, competition: { name: 'Minifotbal' } })).toBe(false);
     expect(isTestMatch({ ...base, externalId: 'manual-123' })).toBe(false);
     expect(isTestMatch({ ...base, externalId: '12345678' })).toBe(false);
-    expect(isTestMatch({ ...base, homeTeam: 'FC Nando' })).toBe(false);
-    expect(isTestMatch({ ...base, homeTeam: 'H', awayTeam: 'A2' })).toBe(false);
+    expect(isTestMatch({ ...base, homeTeam: { name: 'FC Nando' }, awayTeam: { name: 'A' } })).toBe(false);
+    expect(isTestMatch({ ...base, homeTeam: { name: 'H' }, awayTeam: { name: 'A2' } })).toBe(false);
   });
 });
