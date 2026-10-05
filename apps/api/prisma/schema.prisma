@@ -147,3 +147,25 @@ model Notification {
   @@index([userId])
   @@map("notifications")
 }
+
+model Team {
+  id            String    @id @default(cuid())
+  sourceTeamId  Int?      @unique @map("source_team_id")
+  name          String    @unique
+  logoUrl       String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@map("teams")
+}
+
+model Competition {
+  id            String    @id @default(cuid())
+  name          String    @unique
+  emoji         String?
+  logoUrl       String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  @@map("competitions")
+}
