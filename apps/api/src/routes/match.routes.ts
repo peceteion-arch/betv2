@@ -107,24 +107,5 @@ router.get('/:id', authenticate, async (req: AuthRequest, res) => {
   }
 });
 
-router.post('/sync', authenticate, requireAdmin, async (_req: AuthRequest, res) => {
-  try {
-    const count = await matchService.syncMatches();
-    res.json({ message: `Synced ${count} matches` });
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Erro interno';
-    res.status(500).json({ error: message });
-  }
-});
-
-router.post('/sync-odds', authenticate, requireAdmin, async (_req: AuthRequest, res) => {
-  try {
-    const count = await matchService.applyScrapedOdds();
-    res.json({ message: `Applied scraped odds to ${count} matches` });
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Erro interno';
-    res.status(500).json({ error: message });
-  }
-});
 
 export default router;

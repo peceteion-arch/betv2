@@ -1,10 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { env, SCOREABLE_MATCH_STATUSES } from '../config/env';
 import { Prisma } from '@prisma/client';
-import { readFileSync, existsSync } from 'fs';
-import { join } from 'path';
-
-const FOOTBALL_DATA_BASE = 'https://api.football-data.org/v4';
 
 // Odds.value is @db.Decimal, so Prisma hands it back as a Decimal that
 // serialises to a JSON string ("1.90"). The UI calls .toFixed() on it, which
@@ -31,44 +27,6 @@ export interface FootballMatch {
 }
 
 export const matchService = {
-  async fetchFromApi(competitionCode: string = 'WC'): Promise<FootballMatch[]> {
-    if (!env.FOOTBALL_DATA_API_KEY) {
-      return this.getFallbackMatches();
-    }
-
-    try {
-      const response = await fetch(`${FOOTBALL_DATA_BASE}/competitions/${competitionCode}/matches`, {
-        headers: { 'X-Auth-Token': env.FOOTBALL_DATA_API_KEY },
-      });
-
-      if (!response.ok) throw new Error(`API error: ${response.status}`);
-
-      const data = await response.json();
-      return data.matches
-        .filter((m: any) => m.homeTeam?.name && m.awayTeam?.name)
-        .map((m: any) => ({
-          externalId: m.id.toString(),
-          homeTeam: m.homeTeam.name,
-          awayTeam: m.awayTeam.name,
-          homeCrest: m.homeTeam.crest || null,
-          awayCrest: m.awayTeam.crest || null,
-          league: data.competition.name,
-          country: m.area?.name || competitionCode,
-          matchday: m.matchday || null,
-          groupStage: m.group || null,
-          matchDate: new Date(m.utcDate),
-          status: this.mapStatus(m.status),
-          homeScore: m.score?.fullTime?.home,
-          awayScore: m.score?.fullTime?.away,
-        }));
-    } catch {
-      return this.getFallbackMatches();
-    }
-  },
-
-  async fetchAllCompetitions(): Promise<FootballMatch[]> {
-    return this.fetchFromApi('WC');
-  },
 
   mapStatus(apiStatus: string): string {
     const statusMap: Record<string, string> = {
@@ -83,57 +41,6 @@ export const matchService = {
     return statusMap[apiStatus] || 'SCHEDULED';
   },
 
-  async syncMatches() {
-    const allMatches = await this.fetchAllCompetitions();
-    const matches = allMatches.filter(
-      (m) => m.league.toLowerCase().includes('world cup') || m.country === 'World'
-    );
-    for (const match of matches) {
-      const existing = await prisma.match.findUnique({
-        where: { externalId: match.externalId },
-      });
-
-      if (existing) {
-        // A match an admin marked VOID must stay VOID. Without this guard a
-        // later sync would flip it back to SCHEDULED/LIVE/FINISHED and quietly
-        // restore the event into accumulators the operator had removed.
-        if (existing.status === 'VOID') continue;
-
-        await prisma.match.update({
-          where: { id: existing.id },
-          data: {
-            homeScore: match.homeScore,
-            awayScore: match.awayScore,
-            status: match.status,
-          },
-        });
-        const existingOdds = await prisma.odds.findMany({ where: { matchId: existing.id } });
-        if (existingOdds.length === 0) {
-          await this.generateOdds(existing.id);
-        }
-      } else {
-        const newMatch = await prisma.match.create({
-          data: {
-            externalId: match.externalId,
-            homeTeam: match.homeTeam,
-            awayTeam: match.awayTeam,
-            homeCrest: match.homeCrest || null,
-            awayCrest: match.awayCrest || null,
-            league: match.league,
-            country: match.country,
-            matchday: match.matchday || null,
-            groupStage: match.groupStage || null,
-            matchDate: match.matchDate,
-            status: match.status,
-            homeScore: match.homeScore,
-            awayScore: match.awayScore,
-          },
-        });
-        await this.generateOdds(newMatch.id);
-      }
-    }
-    return matches.length;
-  },
 
   async listUpcoming(limit: number = 20, cursor?: string) {
     const now = new Date();
@@ -356,87 +263,4 @@ export const matchService = {
     await prisma.odds.createMany({ data: oddsToCreate });
   },
 
-  getFallbackMatches(): FootballMatch[] {
-    const now = new Date();
-    const wcTeams = [
-      'Brazil', 'Argentina', 'France', 'England', 'Spain', 'Germany',
-      'Portugal', 'Netherlands', 'Belgium', 'Croatia', 'Morocco', 'Japan',
-      'South Korea', 'Australia', 'Senegal', 'USA', 'Canada', 'Mexico',
-      'Ecuador', 'Tunisia', 'Cameroon', 'Serbia', 'Switzerland', 'Poland',
-    ];
-
-    const matches: FootballMatch[] = [];
-    for (let i = 0; i < wcTeams.length - 1; i += 2) {
-      const home = wcTeams[i];
-      const away = wcTeams[i + 1];
-      matches.push({
-        externalId: `wc-${home.toLowerCase().replace(/ /g, '-')}-${away.toLowerCase().replace(/ /g, '-')}`,
-        homeTeam: home,
-        awayTeam: away,
-        league: 'FIFA World Cup 2026',
-        country: 'World',
-        matchDate: new Date(now.getTime() + ((i / 2 + 1) * 24 * 60 * 60 * 1000)),
-        status: 'SCHEDULED',
-      });
-    }
-    return matches;
-  },
-
-  async applyScrapedOdds(): Promise<number> {
-    const oddsPath = join(__dirname, '../../odds.json');
-    if (!existsSync(oddsPath)) return 0;
-
-    const scrapedOdds = JSON.parse(readFileSync(oddsPath, 'utf-8'));
-    let updated = 0;
-
-    for (const item of scrapedOdds) {
-      let match = await prisma.match.findFirst({
-        where: {
-          homeTeam: item.homeTeam,
-          awayTeam: item.awayTeam,
-        },
-      });
-
-      if (!match) {
-        const homeParts = item.homeTeam.split(' ').slice(0, 2).join(' ');
-        const awayParts = item.awayTeam.split(' ').slice(0, 2).join(' ');
-        match = await prisma.match.findFirst({
-          where: {
-            homeTeam: { contains: homeParts },
-            awayTeam: { contains: awayParts },
-          },
-        });
-      }
-
-      if (!match) continue;
-
-      await prisma.odds.deleteMany({ where: { matchId: match.id } });
-
-      const oddsToCreate: Array<{ market: string; selection: string; value: number }> = [];
-
-      if (item.allOdds) {
-        for (const [market, selections] of Object.entries(item.allOdds) as [string, Record<string, number>][]) {
-          for (const [selection, value] of Object.entries(selections)) {
-            oddsToCreate.push({ market, selection, value });
-          }
-        }
-      }
-
-      if (oddsToCreate.length > 0) {
-        await prisma.odds.createMany({
-          data: oddsToCreate.map((odd) => ({
-            matchId: match.id,
-            market: odd.market,
-            selection: odd.selection,
-            value: odd.value,
-            source: 'oddspedia',
-          })),
-        });
-      }
-
-      updated++;
-    }
-
-    return updated;
-  },
 };

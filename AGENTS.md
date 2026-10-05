@@ -85,7 +85,21 @@ Totul se execută într-o singură tranzacție Prisma interactivă (bilete → m
 - `src/middleware/` — `auth.ts` (JWT `authenticate` + `requireAdmin`), `validation.ts` (Zod schema validator)
 - `src/config/env.ts` — Centralized env vars + Zod schemas for request validation
 - `src/lib/prisma.ts` — Singleton PrismaClient (global cache pattern for dev hot-reload)
-- `src/jobs/` — Cron jobs: `syncMatches` (every 30 min, fetches from Football-Data.org), `settleBets` (every 2 min + on startup)
+- `src/jobs/` — Cron jobs: `settleBets` (every 2 min + on startup)
+
+### Notes on feed-based sync (DEPRECATED)
+
+DEPRECATED / HISTORICAL — removed during external-feed cleanup:
+- External match sync from Football-Data.org
+- External odds sync from Oddspedia / odds.json
+- Endpoints and UI for `/matches/sync` and `/matches/sync-odds`
+- The legacy scraper pipeline
+- `FOOTBALL_DATA_API_KEY`
+
+Current architecture: Admin creates matches manually; odds are generated via the temporary internal `generateOdds()`.
+
+You should not assume any external feed is available.
+
 - `prisma/schema.prisma` — Database schema (PostgreSQL)
 
 **Key data flow**:

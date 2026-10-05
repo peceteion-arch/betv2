@@ -50,24 +50,6 @@ app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
 
 // Cron endpoints (protected by CRON_SECRET)
-let syncRunning = false;
-
-app.get('/api/cron/sync', async (req: Request, res: Response) => {
-  const provided = req.headers.authorization?.replace('Bearer ', '') ?? '';
-  if (!provided || provided !== env.CRON_SECRET) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-  if (syncRunning) return res.status(409).json({ error: 'Already running' });
-  syncRunning = true;
-  try {
-    const count = await matchService.syncMatches();
-    res.json({ ok: true, synced: count });
-  } catch (error) {
-    res.status(500).json({ error: 'Sync failed' });
-  } finally {
-    syncRunning = false;
-  }
-});
 
 app.get('/api/cron/settle', async (req: Request, res: Response) => {
   const provided = req.headers.authorization?.replace('Bearer ', '') ?? '';
