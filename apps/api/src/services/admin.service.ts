@@ -71,7 +71,29 @@ export const adminService = {
     if (!user) throw new Error('Utilizador não encontrado');
     if (user.role === 'ADMIN') throw new Error('Não é possível eliminar administradores');
 
-    await prisma.user.delete({ where: { id: userId } });
+    try {
+      await prisma.user.delete({ where: { id: userId } });
+    } catch (error) {
+      // Handle foreign key constraint violations
+      if ((error as any).code === 'P2003') {
+        // Check if it's related to bets or groups (common relational conflicts)
+        const [betCount, groupCount] = await Promise.all([
+          prisma.bet.count({ where: { userId } }),
+          prisma.group.count({ where: { adminId: userId } })
+        ]);
+
+        if (betCount > 0) {
+          throw new Error('Utilizatorul nu poate fi șters deoarece are bilete asociate.');
+        }
+        if (groupCount > 0) {
+          throw new Error('Utilizatorul nu poate fi șters deoarece are grupuri asociate.');
+        }
+        // Fallback for other relational constraints
+        throw new Error('Utilizatorul nu poate fi șters deoarece are înregistrări asociate.');
+      }
+      // Re-throw other errors (e.g., unexpected database errors)
+      throw error;
+    }
   },
 
   async listGroups() {

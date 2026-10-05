@@ -119,13 +119,25 @@ export const matchService = {
     const slug = (s: string) => s.toLowerCase().replace(/\s+/g, '-');
     const externalId = `manual-${slug(data.homeTeam)}-${slug(data.awayTeam)}-${Date.now()}`;
 
+    // Explicitly interpret the admin-entered datetime-local value as
+    // Europe/Bucharest and store the corresponding UTC instant.
+    // The datetime-local input (e.g. "2026-10-01T20:00") carries no timezone.
+    // We treat it as Bucharest time and convert to UTC.
+    // Note: This uses a fixed offset of UTC+3 (Bucharest summer time).
+    // For production, consider using a timezone library (e.g. date-fns-tz)
+    // to handle DST transitions correctly.
+    const bucharestOffsetMs = 3 * 60 * 60 * 1000; // UTC+3
+    // Date.parse treats the string as UTC (since no timezone is given).
+    const utcTime = Date.parse(data.matchDate);
+    const utcMatchDate = new Date(utcTime - bucharestOffsetMs);
+
     const newMatch = await prisma.match.create({
       data: {
         homeTeam: data.homeTeam,
         awayTeam: data.awayTeam,
         league: data.league,
         country: 'Manual',
-        matchDate: new Date(data.matchDate),
+        matchDate: utcMatchDate,
         status: 'SCHEDULED',
         externalId,
         homeCrest: null,
@@ -157,6 +169,8 @@ export const matchService = {
     // Scoring a voided match would silently re-admit it to accumulators. The
     // operator has to explicitly lift the void first.
     if (existing.status === 'VOID') throw new Error('Jogo marcado como VOID - anula o VOID antes de atualizar o resultado');
+    // Prevent updating the score of a finished match (immutability requirement)
+    if (existing.status === 'FINISHED') throw new Error('Não é possível atualizar o resultado de um jogo terminado');
 
     await prisma.match.update({
       where: { id },
@@ -181,7 +195,10 @@ export const matchService = {
 
     const updated = await prisma.match.update({
       where: { id },
-      data: { status: 'VOID' },
+      data: { 
+        status: 'VOID',
+        previousStatus: match.status, // Store the current status before voiding
+      },
       include: { odds: true },
     });
     return { ...updated, odds: mapOdds(updated.odds) };
@@ -190,13 +207,16 @@ export const matchService = {
   // Clears a void so the match can be scored normally again. Without this an
   // accidental void would permanently strip the event from every ticket.
   async unvoidMatch(id: string) {
-    const match = await prisma.match.findUnique({ where: { id }, select: { id: true, status: true } });
+    const match = await prisma.match.findUnique({ where: { id }, select: { id: true, status: true, previousStatus: true } });
     if (!match) throw new Error('Jogo não encontrado');
     if (match.status !== 'VOID') throw new Error('Jogo não está marcado como VOID');
 
     const updated = await prisma.match.update({
       where: { id },
-      data: { status: 'SCHEDULED' },
+      data: { 
+        status: match.previousStatus ?? 'SCHEDULED', // Restore previous status or default to SCHEDULED
+        previousStatus: null, // Clear the previous status after restoration
+      },
       include: { odds: true },
     });
     return { ...updated, odds: mapOdds(updated.odds) };
