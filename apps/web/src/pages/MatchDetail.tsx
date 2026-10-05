@@ -165,10 +165,10 @@ export default function MatchDetail() {
             ) : (
               <div className="text-center">
                 <p className="font-bold text-lg text-white">
-                  {new Date(match.matchDate).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}
+                  {new Date(match.matchDate).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Bucharest' })}
                 </p>
                 <p className="text-[10px] text-gray-500">
-                  {new Date(match.matchDate).toLocaleDateString('pt-PT', { day: '2-digit', month: 'short' })}
+                  {new Date(match.matchDate).toLocaleDateString('pt-PT', { day: '2-digit', month: 'short', timeZone: 'Europe/Bucharest' })}
                 </p>
               </div>
             )}

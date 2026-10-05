@@ -1,0 +1,6 @@
+[features]
+extendedInterpretResolvers = true
+relationalModelV2 = true
+
+[prismaVersion]
+require = "5.22.0"

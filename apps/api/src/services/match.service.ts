@@ -123,13 +123,8 @@ export const matchService = {
     // Europe/Bucharest and store the corresponding UTC instant.
     // The datetime-local input (e.g. "2026-10-01T20:00") carries no timezone.
     // We treat it as Bucharest time and convert to UTC.
-    // Note: This uses a fixed offset of UTC+3 (Bucharest summer time).
-    // For production, consider using a timezone library (e.g. date-fns-tz)
-    // to handle DST transitions correctly.
-    const bucharestOffsetMs = 3 * 60 * 60 * 1000; // UTC+3
-    // Date.parse treats the string as UTC (since no timezone is given).
-    const utcTime = Date.parse(data.matchDate);
-    const utcMatchDate = new Date(utcTime - bucharestOffsetMs);
+    const { fromZonedTime } = await import('date-fns-tz');
+    const utcMatchDate = fromZonedTime(data.matchDate, 'Europe/Bucharest');
 
     const newMatch = await prisma.match.create({
       data: {
@@ -193,15 +188,20 @@ export const matchService = {
     if (!match) throw new Error('Jogo não encontrado');
     if (match.status === 'VOID') throw new Error('Jogo já está marcado como VOID');
 
-    const updated = await prisma.match.update({
+    await prisma.match.update({
       where: { id },
-      data: { 
+      data: {
         status: 'VOID',
         previousStatus: match.status, // Store the current status before voiding
       },
+    });
+
+    const updatedWithOdds = await prisma.match.findUnique({
+      where: { id },
       include: { odds: true },
     });
-    return { ...updated, odds: mapOdds(updated.odds) };
+    if (!updatedWithOdds) throw new Error('Jogo não encontrado após atualização');
+    return { ...updatedWithOdds, odds: mapOdds(updatedWithOdds.odds) };
   },
 
   // Clears a void so the match can be scored normally again. Without this an
@@ -211,15 +211,20 @@ export const matchService = {
     if (!match) throw new Error('Jogo não encontrado');
     if (match.status !== 'VOID') throw new Error('Jogo não está marcado como VOID');
 
-    const updated = await prisma.match.update({
+    await prisma.match.update({
       where: { id },
-      data: { 
+      data: {
         status: match.previousStatus ?? 'SCHEDULED', // Restore previous status or default to SCHEDULED
         previousStatus: null, // Clear the previous status after restoration
       },
+    });
+
+    const updatedWithOdds = await prisma.match.findUnique({
+      where: { id },
       include: { odds: true },
     });
-    return { ...updated, odds: mapOdds(updated.odds) };
+    if (!updatedWithOdds) throw new Error('Jogo não encontrado após atualização');
+    return { ...updatedWithOdds, odds: mapOdds(updatedWithOdds.odds) };
   },
 
   // Refuses to delete a match that already has bets on it, so settled history

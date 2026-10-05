@@ -162,7 +162,7 @@ export default function Matches() {
                     </div>
                   ) : (
                     <span className="text-xs text-gray-500">
-                      {new Date(match.matchDate).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}
+                      {new Date(match.matchDate).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Bucharest' })}
                     </span>
                   )}
                 </div>

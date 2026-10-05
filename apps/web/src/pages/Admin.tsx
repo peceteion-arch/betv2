@@ -398,7 +398,7 @@ export default function Admin() {
                       )}
                     </td>
                     <td className="p-3 text-xs text-gray-400">{match.league}</td>
-                    <td className="p-3 text-xs text-gray-400">{new Date(match.matchDate).toLocaleString('pt-PT')}</td>
+                    <td className="p-3 text-xs text-gray-400">{new Date(match.matchDate).toLocaleString('pt-PT', { timeZone: 'Europe/Bucharest' })}</td>
                     <td className="p-3">
                       <span
                         className={`px-2 py-0.5 rounded text-[10px] ${
