@@ -11,7 +11,6 @@ export const env = {
   JWT_SECRET: process.env.JWT_SECRET || '',
   JWT_EXPIRES_IN: process.env.JWT_EXPIRES_IN || '7d',
   PORT: parseInt(process.env.PORT || '3001'),
-  FOOTBALL_DATA_API_KEY: process.env.FOOTBALL_DATA_API_KEY || '',
   FRONTEND_URL: process.env.FRONTEND_URL || 'http://localhost:5173',
   CRON_SECRET: process.env.CRON_SECRET || '',
 };

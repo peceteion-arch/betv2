@@ -47,26 +47,12 @@ export const betService = {
     if (selections.length > 20) throw new Error('Maximum 20 selections per bet');
 
     const lockedSelections: Array<{ matchId: string; market: string; selection: string; odds: number }> = [];
+    // First, load selections to validate existence and collect match IDs
+    const matchesToValidate: Array<{ matchId: string; market: string; selection: string }> = [];
     for (const s of selections) {
       const match = await prisma.match.findUnique({ where: { id: s.matchId } });
       if (!match) throw new Error(`Match not found: ${s.matchId}`);
-      if (match.status !== 'SCHEDULED') throw new Error(`Jogo ${match.homeTeam} vs ${match.awayTeam} não está disponível para apostas`);
-
-      if (new Date(match.matchDate).getTime() <= Date.now()) {
-        throw new Error(`Jogo ${match.homeTeam} vs ${match.awayTeam} já começou — apostas encerradas`);
-      }
-
-      const dbOdd = await prisma.odds.findFirst({
-        where: { matchId: s.matchId, market: s.market, selection: s.selection },
-      });
-      if (!dbOdd) throw new Error(`Odds not found for ${s.selection} in ${s.market}`);
-
-      lockedSelections.push({
-        matchId: s.matchId,
-        market: s.market,
-        selection: s.selection,
-        odds: Number(dbOdd.value),
-      });
+      matchesToValidate.push({ matchId: s.matchId, market: s.market, selection: s.selection });
     }
 
     const seen = new Set<string>();
@@ -78,18 +64,32 @@ export const betService = {
 
     // Round the combined odds BEFORE deriving the payout, so the ticket
     // satisfies stake * totalOdds === potentialReturn at stored precision.
-    // The previous order (raw totalOdds -> payout, then round both) left the
-    // two fields inconsistent: stake 100 on legs [1.955, 1.871] stored
-    // totalOdds 3.66 but potentialReturn 365.78 instead of 366.00.
     const totalOdds = round2(lockedSelections.reduce((acc, s) => acc * s.odds, 1));
     const potentialReturn = round2(stake * totalOdds);
 
     const bet = await prisma.$transaction(async (tx) => {
+      // Validate user and balance
       const user = await tx.user.findUnique({ where: { id: userId } });
       if (!user) throw new Error('Utilizador não encontrado');
       if (user.isBlocked) throw new Error('Conta bloqueada');
       if (stake <= 0) throw new Error('Stake deve ser superior a 0');
       if (Number(user.balance) < stake) throw new Error('Saldo insuficiente');
+
+      // CRITICAL: Re-validate match status and kickoff within transaction
+      // to prevent race conditions where match state changes after initial validation
+      for (const matchInfo of matchesToValidate) {
+        const match = await tx.match.findUnique({ where: { id: matchInfo.matchId } });
+        if (!match) throw new Error(`Match not found: ${matchInfo.matchId}`);
+        if (match.status !== 'SCHEDULED') throw new Error(`Jogo ${match.homeTeam} vs ${match.awayTeam} não está disponível para apostas`);
+        if (new Date(match.matchDate).getTime() <= Date.now()) {
+          throw new Error(`Jogo ${match.homeTeam} vs ${match.awayTeam} já começou — apostas encerradas`);
+        }
+        // Validate odds still exist
+        const dbOdd = await tx.odds.findFirst({
+          where: { matchId: matchInfo.matchId, market: matchInfo.market, selection: matchInfo.selection },
+        });
+        if (!dbOdd) throw new Error(`Odds not found for ${matchInfo.selection} in ${matchInfo.market}`);
+      }
 
       await tx.user.update({
         where: { id: userId, balance: { gte: stake } },
@@ -103,11 +103,11 @@ export const betService = {
           totalOdds,
           potentialReturn,
           selections: {
-            create: lockedSelections.map((s) => ({
-              matchId: s.matchId,
-              market: s.market,
-              selection: s.selection,
-              odds: s.odds,
+            create: matchesToValidate.map((m) => ({
+              matchId: m.matchId,
+              market: m.market,
+              selection: m.selection,
+              odds: lockedSelections.find((ls) => ls.matchId === m.matchId && ls.market === m.market && ls.selection === m.selection)!.odds,
             })),
           },
         },

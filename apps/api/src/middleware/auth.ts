@@ -8,7 +8,7 @@ export interface AuthRequest extends Request {
   userRole?: string;
 }
 
-export const authenticate = (req: AuthRequest, res: Response, next: NextFunction) => {
+export const authenticate = async (req: AuthRequest, res: Response, next: NextFunction) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
 
   if (!token) {
@@ -17,8 +17,19 @@ export const authenticate = (req: AuthRequest, res: Response, next: NextFunction
 
   try {
     const decoded = jwt.verify(token, env.JWT_SECRET) as { userId: string; role: string };
+    
+    // Verify user still exists and is not blocked
+    const user = await prisma.user.findUnique({
+      where: { id: decoded.userId },
+      select: { isBlocked: true, role: true },
+    });
+    
+    if (!user || user.isBlocked) {
+      return res.status(401).json({ error: 'Invalid token' });
+    }
+    
     req.userId = decoded.userId;
-    req.userRole = decoded.role;
+    req.userRole = user.role; // Use fresh role from DB
     next();
   } catch {
     return res.status(401).json({ error: 'Invalid token' });

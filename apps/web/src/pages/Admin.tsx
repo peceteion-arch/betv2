@@ -50,7 +50,7 @@ export default function Admin() {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [groups, setGroups] = useState<AdminGroup[]>([]);
-  const [tab, setTab] = useState<'stats' | 'users' | 'groups' | 'sync' | 'meciuri'>('stats');
+  const [tab, setTab] = useState<'stats' | 'users' | 'groups' | 'meciuri'>('stats');
   const [showCreateUser, setShowCreateUser] = useState(false);
   const [newUser, setNewUser] = useState({ name: '', email: '', password: '', balance: 100 });
   const [error, setError] = useState('');
@@ -124,15 +124,7 @@ export default function Admin() {
     }
   };
 
-  const handleSyncMatches = async () => {
-    const r = await api.post('/matches/sync');
-    alert(r.data.message);
-  };
 
-  const handleSyncOdds = async () => {
-    const r = await api.post('/matches/sync-odds');
-    alert(r.data.message);
-  };
 
   const handleCreateMatch = async () => {
     setMatchError('');
@@ -150,6 +142,11 @@ export default function Admin() {
 
   const handleUpdateScore = async () => {
     if (!scoreEdit) return;
+    // Validate that scores are not empty
+    if (scoreEdit.homeScore === '' || scoreEdit.awayScore === '') {
+      setMatchError('Os campos de resultado não podem estar vazios');
+      return;
+    }
     setMatchError('');
     try {
       const r = await api.patch(`/matches/${scoreEdit.matchId}/score`, {
@@ -207,7 +204,7 @@ export default function Admin() {
       <h1 className="text-2xl font-black">Painel de Administração</h1>
 
       <div className="flex gap-2">
-        {(['stats', 'users', 'groups', 'sync', 'meciuri'] as const).map((t) => (
+        {(['stats', 'users', 'groups', 'meciuri'] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -215,7 +212,7 @@ export default function Admin() {
               tab === t ? 'bg-neon-green text-black' : 'bg-bet-700 text-gray-400 hover:text-white'
             }`}
           >
-            {t === 'stats' ? 'Estatísticas' : t === 'users' ? 'Utilizadores' : t === 'groups' ? 'Grupos' : t === 'meciuri' ? 'Meciuri' : 'Sincronizar'}
+            {t === 'stats' ? 'Estatísticas' : t === 'users' ? 'Utilizadores' : t === 'groups' ? 'Grupos' : t === 'meciuri' ? 'Meciuri' : ''}
           </button>
         ))}
       </div>
@@ -494,16 +491,7 @@ export default function Admin() {
         </div>
       )}
 
-      {tab === 'sync' && (
-        <div className="card-bet p-6">
-          <h3 className="font-bold mb-4">Sincronizar Dados</h3>
-          <div className="space-y-3">
-            <button onClick={handleSyncMatches} className="btn-neon w-full text-sm">Sincronizar Jogos (Football-Data.org)</button>
-            <button onClick={handleSyncOdds} className="btn-neon-blue w-full text-sm">Aplicar Odds Scrapadas (Oddspedia)</button>
-            <p className="text-xs text-gray-500 mt-4">Para odds frescas, corre primeiro: <code className="bg-bet-700 px-1 rounded">python apps/api/scraper.py</code></p>
-          </div>
-        </div>
-      )}
+      
     </div>
   );
 }

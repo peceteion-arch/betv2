@@ -50,41 +50,8 @@ app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/register', authLimiter);
 
 // Cron endpoints (protected by CRON_SECRET)
-let syncRunning = false;
-
-app.get('/api/cron/sync', async (req: Request, res: Response) => {
-  const provided = req.headers.authorization?.replace('Bearer ', '') ?? '';
-  if (!provided || provided !== env.CRON_SECRET) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-  if (syncRunning) return res.status(409).json({ error: 'Already running' });
-  syncRunning = true;
-  try {
-    const count = await matchService.syncMatches();
-    res.json({ ok: true, synced: count });
-  } catch (error) {
-    res.status(500).json({ error: 'Sync failed' });
-  } finally {
-    syncRunning = false;
-  }
-});
-
-app.get('/api/cron/settle', async (req: Request, res: Response) => {
-  const provided = req.headers.authorization?.replace('Bearer ', '') ?? '';
-  if (!provided || provided !== env.CRON_SECRET) {
-    return res.status(401).json({ error: 'Unauthorized' });
-  }
-  if (settleRunning) return res.status(409).json({ error: 'Already running' });
-  setSettleRunning(true);
-  try {
-    await betService.settlePendingBets();
-    res.json({ ok: true });
-  } catch (error) {
-    res.status(500).json({ error: 'Settlement failed' });
-  } finally {
-    setSettleRunning(false);
-  }
-});
+// Removed automatic settlement cron per requirements
+// Only manual settlement via /api/bets/settle is allowed
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
