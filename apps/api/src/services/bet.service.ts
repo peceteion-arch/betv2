@@ -47,25 +47,6 @@ export const betService = {
     if (selections.length > 20) throw new Error('Maximum 20 selections per bet');
 
     const lockedSelections: Array<{ matchId: string; market: string; selection: string; odds: number }> = [];
-    // First, load selections to validate existence and collect match IDs
-    const matchesToValidate: Array<{ matchId: string; market: string; selection: string }> = [];
-    for (const s of selections) {
-      const match = await prisma.match.findUnique({ where: { id: s.matchId } });
-      if (!match) throw new Error(`Match not found: ${s.matchId}`);
-      matchesToValidate.push({ matchId: s.matchId, market: s.market, selection: s.selection });
-    }
-
-    const seen = new Set<string>();
-    for (const s of lockedSelections) {
-      const key = `${s.matchId}-${s.market}`;
-      if (seen.has(key)) throw new Error(`Duplicate selection: ${s.market} on match ${s.matchId}`);
-      seen.add(key);
-    }
-
-    // Round the combined odds BEFORE deriving the payout, so the ticket
-    // satisfies stake * totalOdds === potentialReturn at stored precision.
-    const totalOdds = round2(lockedSelections.reduce((acc, s) => acc * s.odds, 1));
-    const potentialReturn = round2(stake * totalOdds);
 
     const bet = await prisma.$transaction(async (tx) => {
       // Validate user and balance
@@ -75,21 +56,37 @@ export const betService = {
       if (stake <= 0) throw new Error('Stake deve ser superior a 0');
       if (Number(user.balance) < stake) throw new Error('Saldo insuficiente');
 
-      // CRITICAL: Re-validate match status and kickoff within transaction
-      // to prevent race conditions where match state changes after initial validation
-      for (const matchInfo of matchesToValidate) {
-        const match = await tx.match.findUnique({ where: { id: matchInfo.matchId } });
-        if (!match) throw new Error(`Match not found: ${matchInfo.matchId}`);
+      const seen = new Set<string>();
+
+      for (const s of selections) {
+        // Re-fetch match inside transaction
+        const match = await tx.match.findUnique({ where: { id: s.matchId } });
+        if (!match) throw new Error(`Match not found: ${s.matchId}`);
         if (match.status !== 'SCHEDULED') throw new Error(`Jogo ${match.homeTeam} vs ${match.awayTeam} não está disponível para apostas`);
         if (new Date(match.matchDate).getTime() <= Date.now()) {
           throw new Error(`Jogo ${match.homeTeam} vs ${match.awayTeam} já começou — apostas encerradas`);
         }
-        // Validate odds still exist
+
+        // Re-fetch odds inside transaction
         const dbOdd = await tx.odds.findFirst({
-          where: { matchId: matchInfo.matchId, market: matchInfo.market, selection: matchInfo.selection },
+          where: { matchId: s.matchId, market: s.market, selection: s.selection },
         });
-        if (!dbOdd) throw new Error(`Odds not found for ${matchInfo.selection} in ${matchInfo.market}`);
+        if (!dbOdd) throw new Error(`Odds not found for ${s.selection} in ${s.market}`);
+
+        const key = `${s.matchId}-${s.market}`;
+        if (seen.has(key)) throw new Error(`Duplicate selection: ${s.market} on match ${s.matchId}`);
+        seen.add(key);
+
+        lockedSelections.push({
+          matchId: s.matchId,
+          market: s.market,
+          selection: s.selection,
+          odds: Number(dbOdd.value),
+        });
       }
+
+      const totalOdds = round2(lockedSelections.reduce((acc, s) => acc * s.odds, 1));
+      const potentialReturn = round2(stake * totalOdds);
 
       await tx.user.update({
         where: { id: userId, balance: { gte: stake } },
@@ -103,11 +100,11 @@ export const betService = {
           totalOdds,
           potentialReturn,
           selections: {
-            create: matchesToValidate.map((m) => ({
-              matchId: m.matchId,
-              market: m.market,
-              selection: m.selection,
-              odds: lockedSelections.find((ls) => ls.matchId === m.matchId && ls.market === m.market && ls.selection === m.selection)!.odds,
+            create: lockedSelections.map((s) => ({
+              matchId: s.matchId,
+              market: s.market,
+              selection: s.selection,
+              odds: s.odds,
             })),
           },
         },
@@ -115,6 +112,7 @@ export const betService = {
       });
     });
 
+    const totalOdds = round2(lockedSelections.reduce((acc, s) => acc * s.odds, 1));
     await notificationService.create(userId, 'BET_CREATED', `Aposta de ${stake} CR colocada @ ${totalOdds.toFixed(2)}`);
 
     return mapBet(bet);
@@ -209,6 +207,7 @@ export const betService = {
     if (!result) throw new Error('Bet not found');
     return mapBet(result);
   },
+
   // Settles every PENDING ticket, one short transaction per ticket.
   //
   // The previous version opened a single transaction spanning the whole loop.
