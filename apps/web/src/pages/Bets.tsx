@@ -258,45 +258,45 @@ export default function Bets() {
                   const awaitingDecision =
                     sel.won === null && sel.match.status === 'FINISHED' && !isVoid;
                   return (
-                  <div key={sel.id} className={`flex items-center justify-between p-3 rounded-xl text-sm ${
-                    sel.won === true ? 'bg-green-500/10 border border-green-500/20' :
-                    sel.won === false ? 'bg-red-500/10 border border-red-500/20' :
-                    isVoid ? 'bg-neon-blue/10 border border-neon-blue/20' :
-                    'bg-gray-700/50'
-                  }`}>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold truncate">{sel.match.homeTeam} vs {sel.match.awayTeam}</p>
-                      <p className={`text-xs ${sel.won === true ? 'text-green-400' : sel.won === false ? 'text-red-400' : isVoid ? 'text-neon-blue' : 'text-gray-400'}`}>
-                        {getSelectionLabel(sel)} @ {sel.odds.toFixed(2)}
-                        {isVoid && <span className="ml-2 text-neon-blue font-semibold">VOID</span>}
-                      </p>
+                    <div key={sel.id} className={`flex items-center justify-between p-3 rounded-xl text-sm ${
+                      sel.won === true ? 'bg-green-500/10 border border-green-500/20' :
+                      sel.won === false ? 'bg-red-500/10 border border-red-500/20' :
+                      isVoid ? 'bg-neon-blue/10 border border-neon-blue/20' :
+                      'bg-gray-700/50'
+                    }`}>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold truncate">{sel.match.homeTeam} vs {sel.match.awayTeam}</p>
+                        <p className={`text-xs ${sel.won === true ? 'text-green-400' : sel.won === false ? 'text-red-400' : isVoid ? 'text-neon-blue' : 'text-gray-400'}`}>
+                          {getSelectionLabel(sel)} @ {sel.odds.toFixed(2)}
+                          {isVoid && <span className="ml-2 text-neon-blue font-semibold">VOID</span>}
+                        </p>
+                      </div>
+                      {isVoid ? (
+                        <div className="text-right mr-3">
+                          <p className="text-[10px] text-neon-blue font-bold">Cota efetiva</p>
+                          <p className="font-bold text-sm text-neon-blue">1.00</p>
+                        </div>
+                      ) : sel.match.status === 'FINISHED' ? (
+                        <div className="text-right mr-3">
+                          <p className="text-[10px] text-gray-500">Resultado</p>
+                          <p className="font-bold text-sm">{sel.match.homeScore} - {sel.match.awayScore}</p>
+                        </div>
+                      ) : (
+                        <div className="text-right mr-3">
+                          <p className="text-[10px] text-gray-600">Agendado</p>
+                          <p className="text-[10px] text-gray-500">{new Date(sel.match.matchDate).toLocaleDateString('pt-PT')}</p>
+                        </div>
+                      )}
+                      {awaitingDecision ? (
+                        <span className="text-[10px] text-gray-500 text-right leading-tight max-w-20">
+                          A aguardar decisão
+                        </span>
+                      ) : (
+                        <span className="text-lg">
+                          {sel.won === true ? '✅' : sel.won === false ? '❌' : isVoid ? '➖' : '⏳'}
+                        </span>
+                      )}
                     </div>
-                    {isVoid ? (
-                      <div className="text-right mr-3">
-                        <p className="text-[10px] text-neon-blue font-bold">Cota efetiva</p>
-                        <p className="font-bold text-sm text-neon-blue">1.00</p>
-                      </div>
-                    ) : sel.match.status === 'FINISHED' ? (
-                      <div className="text-right mr-3">
-                        <p className="text-[10px] text-gray-500">Resultado</p>
-                        <p className="font-bold text-sm">{sel.match.homeScore} - {sel.match.awayScore}</p>
-                      </div>
-                    ) : (
-                      <div className="text-right mr-3">
-                        <p className="text-[10px] text-gray-600">Agendado</p>
-                        <p className="text-[10px] text-gray-500">{new Date(sel.match.matchDate).toLocaleDateString('pt-PT')}</p>
-                      </div>
-                    )}
-                    {awaitingDecision ? (
-                      <span className="text-[10px] text-gray-500 text-right leading-tight max-w-20">
-                        A aguardar decisão
-                      </span>
-                    ) : (
-                      <span className="text-lg">
-                        {sel.won === true ? '✅' : sel.won === false ? '❌' : isVoid ? '➖' : '⏳'}
-                      </span>
-                    )}
-                  </div>
                   );
                 })}
               </div>
@@ -306,7 +306,7 @@ export default function Bets() {
                 <div className="flex gap-4 text-xs text-gray-500">
                   <span>Stake: <b className="text-white">{bet.stake} CR</b></span>
                   <span>Odds: <b className="text-white">{bet.totalOdds.toFixed(2)}</b></span>
-                  <span>Retorno: <b className="text-blue-400">{bet.potentialReturn.toFixed(0)} CR</b></span>
+                  <span>Retorno: <b className="text-blue-400">{bet.potentialReturn.toFixed(2)} CR</b></span>
                 </div>
                 {canCancel(bet) && (
                   <button

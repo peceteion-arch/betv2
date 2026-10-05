@@ -105,7 +105,7 @@ export default function BetSlipInline({ onSuccess }: BetSlipInlineProps) {
           </div>
           <div className="flex justify-between text-xs text-gray-400">
             <span>Retorno Potencial</span>
-            <span className="font-bold text-neon-green text-lg">{(stake * totalOdds()).toFixed(2)} CR</span>
+            <span className="font-bold text-neon-green text-lg">{((Math.round((stake * totalOdds()) * 100) / 100)).toFixed(2)} CR</span>
           </div>
         </div>
 

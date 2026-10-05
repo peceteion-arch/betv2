@@ -23,49 +23,56 @@ interface BetSlipStore {
   totalOdds: () => number;
 }
 
-export const useBetSlip = create<BetSlipStore>((set, get) => ({
-  selections: [],
-  stake: 10,
-  sheetOpen: false,
+const round2 = (value: number) => Math.round(value * 100) / 100;
 
-  addSelection: (selection) => {
-    set((state) => {
-      const exists = state.selections.find(
-        (s) => s.matchId === selection.matchId && s.market === selection.market
-      );
-      if (exists) {
-        return {
-          selections: state.selections.map((s) =>
-            s.matchId === selection.matchId && s.market === selection.market
-              ? selection
-              : s
-          ),
-        };
-      }
-      return { selections: [...state.selections, selection] };
-    });
-  },
+export const useBetSlip = create<BetSlipStore>((set, get) => {
+  return {
+    selections: [],
+    stake: 10,
+    sheetOpen: false,
 
-  removeSelection: (matchId, market) => {
-    set((state) => ({
-      selections: state.selections.filter(
-        (s) => !(s.matchId === matchId && s.market === market)
-      ),
-    }));
-  },
+    addSelection: (selection) => {
+      set((state) => {
+        const exists = state.selections.find(
+          (s) => s.matchId === selection.matchId && s.market === selection.market
+        );
+        if (exists) {
+          return {
+            selections: state.selections.map((s) =>
+              s.matchId === selection.matchId && s.market === selection.market
+                ? selection
+                : s
+            ),
+          };
+        }
+        return { selections: [...state.selections, selection] };
+      });
+    },
 
-  setStake: (stake) => set({ stake }),
+    removeSelection: (matchId, market) => {
+      set((state) => ({
+        selections: state.selections.filter(
+          (s) => !(s.matchId === matchId && s.market === market)
+        ),
+      }));
+    },
 
-  setSheetOpen: (sheetOpen) => set({ sheetOpen }),
+    setStake: (stake) => set({ stake }),
 
-  clear: () => set({ selections: [], stake: 10, sheetOpen: false }),
+    setSheetOpen: (sheetOpen) => set({ sheetOpen }),
 
-  totalOdds: () => {
-    const { selections } = get();
-    return selections.reduce((acc, s) => acc * s.odds, 1);
-  },
-}));
+    clear: () => set({ selections: [], stake: 10, sheetOpen: false }),
+
+    totalOdds: () => {
+      const { selections } = get();
+      const raw = selections.reduce((acc, s) => acc * s.odds, 1);
+      return round2(raw);
+    },
+  };
+});
 
 // Selector for derived totalOdds — use this in components instead of calling totalOdds()
-export const selectTotalOdds = (state: BetSlipStore) =>
-  state.selections.reduce((acc, s) => acc * s.odds, 1);
+export const selectTotalOdds = (state: BetSlipStore) => {
+  const raw = state.selections.reduce((acc, s) => acc * s.odds, 1);
+  return round2(raw);
+};
