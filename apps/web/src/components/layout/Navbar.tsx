@@ -109,14 +109,24 @@ export default function Navbar({ isMobile }: NavbarProps) {
                 </Link>
 
                 {user?.role === 'ADMIN' && (
-                  <Link
-                    to="/admin"
-                    onClick={() => setShowMenu(false)}
-                    className="flex items-center gap-3 px-4 py-3 text-sm text-gray-300 hover:bg-bet-600 hover:text-white transition-colors"
-                  >
-                    <span>⚙️</span>
-                    Admin
-                  </Link>
+                  <>
+                    <Link
+                      to="/admin"
+                      onClick={() => setShowMenu(false)}
+                      className="flex items-center gap-3 px-4 py-3 text-sm text-gray-300 hover:bg-bet-600 hover:text-white transition-colors"
+                    >
+                      <span>⚙️</span>
+                      Admin
+                    </Link>
+                    <Link
+                      to="/admin/competitii"
+                      onClick={() => setShowMenu(false)}
+                      className="flex items-center gap-3 px-4 py-3 text-sm text-gray-300 hover:bg-bet-600 hover:text-white transition-colors"
+                    >
+                      <span>🏆</span>
+                      Competiții
+                    </Link>
+                  </>
                 )}
 
                 <hr className="border-bet-600 my-1" />

@@ -13,6 +13,7 @@ import Rankings from './pages/Rankings';
 import Statistics from './pages/Statistics';
 import Notifications from './pages/Notifications';
 import Admin from './pages/Admin';
+import AdminCompetitions from './pages/AdminCompetitions';
 import ChangePassword from './pages/ChangePassword';
 import Install from './pages/Install';
 
@@ -47,6 +48,7 @@ export default function App() {
         <Route path="statistics" element={<Statistics />} />
         <Route path="notifications" element={<Notifications />} />
         <Route path="admin" element={<AdminRoute><Admin /></AdminRoute>} />
+        <Route path="admin/competitii" element={<AdminRoute><AdminCompetitions /></AdminRoute>} />
         <Route path="change-password" element={<ChangePassword />} />
         <Route path="install" element={<Install />} />
       </Route>
