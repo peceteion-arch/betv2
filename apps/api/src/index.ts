@@ -68,6 +68,9 @@ app.use('/api/teams', teamRoutes);
 app.use('/api/competitions', competitionRoutes);
 app.use('/api/odds', oddsRoutes);
 
+// Serve static uploads
+app.use('/uploads', express.static(join(__dirname, '../uploads')));
+
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -78,7 +81,7 @@ const webDistPath = join(__dirname, '../../web/dist');
 if (existsSync(webDistPath)) {
   app.use(express.static(webDistPath));
   app.get('*', (req, res) => {
-    if (!req.path.startsWith('/api')) {
+    if (!req.path.startsWith('/api') && !req.path.startsWith('/uploads')) {
       res.sendFile(join(webDistPath, 'index.html'));
     }
   });
