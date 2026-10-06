@@ -65,6 +65,20 @@ export default function Admin() {
   } | null>(null);
   const [matchError, setMatchError] = useState('');
   const [matchLoading, setMatchLoading] = useState(false);
+  const [newTeamFor, setNewTeamFor] = useState<'home' | 'away' | null>(null);
+  const [newTeam, setNewTeam] = useState({ name: '', logoUrl: '' });
+  const [newTeamError, setNewTeamError] = useState('');
+  const [newTeamLoading, setNewTeamLoading] = useState(false);
+
+  const loadTeams = async () => {
+    const r = await api.get('/teams');
+    const sorted = [...r.data].sort((a: any, b: any) =>
+      String(a.name).localeCompare(String(b.name), 'ro', { sensitivity: 'base' })
+    );
+    const map: Record<string, string> = {};
+    sorted.forEach((t: any) => { map[t.id] = t.name; });
+    setTeamMap(map);
+  };
 
   useEffect(() => {
     if (user?.role !== 'ADMIN') return;
@@ -76,13 +90,7 @@ export default function Admin() {
   useEffect(() => {
     if (user?.role !== 'ADMIN' || tab !== 'meciuri') return;
     api.get('/matches/all').then((r) => setMatches(r.data));
-    api.get('/teams').then((r) => {
-      const teamMap: Record<string, string> = {};
-      r.data.forEach((t: any) => {
-        teamMap[t.id] = t.name;
-      });
-      setTeamMap(teamMap);
-    });
+    loadTeams();
     api.get('/competitions').then((r) => {
       const competitionMap: Record<string, string> = {};
       r.data.forEach((c: any) => {
@@ -141,13 +149,36 @@ export default function Admin() {
 
 
 
+    const handleCreateTeam = async () => {
+    setNewTeamError('');
+    const name = newTeam.name.trim();
+    if (name.length < 2) {
+      setNewTeamError('Numele echipei trebuie să aibă minim 2 caractere');
+      return;
+    }
+    setNewTeamLoading(true);
+    try {
+      const r = await api.post('/teams', { name, logoUrl: newTeam.logoUrl.trim() || null });
+      await loadTeams();
+      if (newTeamFor) {
+        setMatchForm((prev) => ({ ...prev, [newTeamFor === 'home' ? 'homeTeamId' : 'awayTeamId']: r.data.id }));
+      }
+      setNewTeam({ name: '', logoUrl: '' });
+      setNewTeamFor(null);
+    } catch (err: any) {
+      setNewTeamError(err.response?.data?.error || 'Eroare la crearea echipei');
+    } finally {
+      setNewTeamLoading(false);
+    }
+  };
+
   const handleCreateMatch = async () => {
     setMatchError('');
     setMatchLoading(true);
     try {
       // Validate required fields
-      if (!matchForm.homeTeamId || !matchForm.awayTeamId || !matchForm.competitionId || !matchForm.matchDate || !matchForm.matchday) {
-        setMatchError('Toate câmpurile sunt obligatorii');
+      if (!matchForm.homeTeamId || !matchForm.awayTeamId || (!matchForm.competitionId && (!matchForm.league || !matchForm.league.trim()))) {
+        setMatchError('Selectează o competiție sau introdu numele ligii');
         return;
       }
       const matchdayNum = Number(matchForm.matchday);
@@ -156,13 +187,18 @@ export default function Admin() {
         return;
       }
 
-      const matchData = {
+      const matchData: any = {
         ...matchForm,
         matchday: matchdayNum,
       };
+
+      // Clean empty strings to avoid potential 400s from API
+      if (!matchData.competitionId) delete matchData.competitionId;
+      if (!matchData.league) delete matchData.league;
+
       const r = await api.post('/matches/manual', matchData);
       setMatches((prev) => [r.data, ...prev]);
-      setMatchForm({ homeTeamId: '', awayTeamId: '', competitionId: '', matchDate: '', matchday: '1' });
+      setMatchForm({ homeTeamId: '', awayTeamId: '', competitionId: '', league: '', matchDate: '', matchday: '1' });
     } catch (err: any) {
       setMatchError(err.response?.data?.error || 'Erro ao criar jogo');
     } finally {
@@ -372,32 +408,46 @@ export default function Admin() {
             {matchError && <p className="text-neon-red text-sm">{matchError}</p>}
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <input
+                <select
                   className="input-bet"
-                  list="homeTeamList"
-                  placeholder="Casa (ex: FC Nando)"
                   value={matchForm.homeTeamId}
                   onChange={(e) => setMatchForm({ ...matchForm, homeTeamId: e.target.value })}
-                />
-                <datalist id="homeTeamList">
+                >
+                  <option value="">Selectează echipa gazdă</option>
                   {Object.entries(teamMap).map(([id, name]) => (
-                    <option key={id} value={id}>{name}</option>
+                    <option key={id} value={id}>
+                      {name}
+                    </option>
                   ))}
-                </datalist>
+                </select>
+                <button
+                  type="button"
+                  className="text-xs text-neon-green mt-1 hover:underline"
+                  onClick={() => { setNewTeamFor('home'); setNewTeamError(''); }}
+                >
+                  + Echipă nouă
+                </button>
               </div>
               <div>
-                <input
+                <select
                   className="input-bet"
-                  list="awayTeamList"
-                  placeholder="Fora (ex: Sporting Galați)"
                   value={matchForm.awayTeamId}
                   onChange={(e) => setMatchForm({ ...matchForm, awayTeamId: e.target.value })}
-                />
-                <datalist id="awayTeamList">
+                >
+                  <option value="">Selectează echipa oaspete</option>
                   {Object.entries(teamMap).map(([id, name]) => (
-                    <option key={id} value={id}>{name}</option>
+                    <option key={id} value={id}>
+                      {name}
+                    </option>
                   ))}
-                </datalist>
+                </select>
+                <button
+                  type="button"
+                  className="text-xs text-neon-green mt-1 hover:underline"
+                  onClick={() => { setNewTeamFor('away'); setNewTeamError(''); }}
+                >
+                  + Echipă nouă
+                </button>
               </div>
               <div>
                 <div className="relative">
@@ -441,6 +491,38 @@ export default function Admin() {
                 onChange={(e) => setMatchForm({ ...matchForm, matchDate: e.target.value })}
               />
             </div>
+            {newTeamFor && (
+              <div className="space-y-2 border border-bet-600 rounded-lg p-3">
+                <p className="text-xs text-gray-400">
+                  Echipă nouă pentru {newTeamFor === 'home' ? 'gazdă' : 'oaspete'}
+                </p>
+                {newTeamError && <p className="text-neon-red text-sm">{newTeamError}</p>}
+                <input
+                  className="input-bet"
+                  placeholder="Nume echipă"
+                  value={newTeam.name}
+                  onChange={(e) => setNewTeam({ ...newTeam, name: e.target.value })}
+                />
+                <input
+                  className="input-bet"
+                  placeholder="Logo URL (opțional)"
+                  value={newTeam.logoUrl}
+                  onChange={(e) => setNewTeam({ ...newTeam, logoUrl: e.target.value })}
+                />
+                <div className="flex gap-2">
+                  <button type="button" onClick={handleCreateTeam} disabled={newTeamLoading} className="btn-neon-solid text-sm">
+                    {newTeamLoading ? 'Se salvează...' : 'Salvează echipa'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setNewTeamFor(null); setNewTeam({ name: '', logoUrl: '' }); setNewTeamError(''); }}
+                    className="btn-neon text-sm"
+                  >
+                    Anulează
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="flex gap-2">
               <button onClick={handleCreateMatch} disabled={matchLoading} className="btn-neon-solid text-sm">
                 {matchLoading ? 'A criar...' : '+ Criar Jogo'}
@@ -532,7 +614,7 @@ export default function Admin() {
                         ) : (
                           <>
                             <button
-                              onClick={() => setScoreEdit({ matchId: match.id, homeScore: '', awayScore: '' })}
+                              onClick={() => setScoreEdit({ matchId: match.id, homeScore: String(match.homeScore ?? 0), awayScore: String(match.awayScore ?? 0) })}
                               className="text-[10px] text-neon-yellow hover:underline"
                             >
                               Resultado

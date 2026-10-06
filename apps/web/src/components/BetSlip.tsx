@@ -1,18 +1,22 @@
 import { useBetSlip } from '../store/betSlip';
 import { useAuth } from '../lib/auth';
 import api from '../lib/api';
+import { useLiveOdds } from '../store/liveOdds';
 import { useState } from 'react';
 
 export default function BetSlip() {
-  const { selections, stake, setStake, totalOdds, clear, removeSelection } = useBetSlip();
+  const { selections, stake, setStake, totalOdds, clear, removeSelection, updateOdds } = useBetSlip();
+  const liveOdds = useLiveOdds((s) => s.liveOdds);
   const { user, refreshUser } = useAuth();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+  const [oddsConflict, setOddsConflict] = useState<{ oldOdds: number, newOdds: number, matchId: string, market: string, selection: string }[]>([]);
 
   const handlePlaceBet = async () => {
     if (selections.length === 0 || stake <= 0) return;
     setError('');
+    setOddsConflict([]);
     setLoading(true);
     try {
       await api.post('/bets', {
@@ -29,7 +33,20 @@ export default function BetSlip() {
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Erro ao colocar aposta');
+      if (err.response?.status === 409 && err.response?.data?.changes) {
+        const changes = err.response.data.changes;
+        changes.forEach((c: any) => {
+          if (c.available) {
+            updateOdds(c.matchId, c.market, c.selection ?? '', c.newOdds);
+          } else {
+            removeSelection(c.matchId, c.market);
+          }
+        });
+        setError('Cotele s-au schimbat. Te rugăm să verifici biletul și să confirmi.');
+        setOddsConflict(changes);
+      } else {
+        setError(err.response?.data?.error || 'Erro ao colocar aposta');
+      }
     } finally {
       setLoading(false);
     }
@@ -72,13 +89,26 @@ export default function BetSlip() {
             </button>
             <p className="text-[10px] text-gray-500 uppercase">{s.market.replace(/_/g, ' ').replace('MARCAS', 'GOLOS').replace('IMPAR PAR', 'ÍMPAR/PAR')}</p>
             <p className="text-xs font-semibold mt-0.5">{s.homeTeam} vs {s.awayTeam}</p>
+            {s.oddsEnabled === false && (
+              <div className="bg-red-500/10 border border-neon-red/40 text-neon-red px-2 py-1 rounded text-xs font-bold mt-2">
+                indisponível
+              </div>
+            )}
             <div className="flex items-center justify-between mt-2">
               <span className="text-neon-green font-bold text-sm">
                 {s.selection === '1' ? s.homeTeam : s.selection === 'X' ? 'Empate' : s.selection === '2' ? s.awayTeam : s.selection}
               </span>
-              <span className="bg-neon-green/10 text-neon-green font-bold text-xs px-2 py-0.5 rounded">
-                {Number(s.odds).toFixed(2)}
-              </span>
+              <div className="flex items-center gap-1">
+                <span className="bg-neon-green/10 text-neon-green font-bold text-xs px-2 py-0.5 rounded">
+                  {Number(s.odds).toFixed(2)}
+                </span>
+                {liveOdds.has(`${s.matchId}|${s.market}|${s.selection}`) && liveOdds.get(`${s.matchId}|${s.market}|${s.selection}`)?.trend === 'up' && (
+                  <span className="text-green-500 font-bold text-xs">▲</span>
+                )}
+                {liveOdds.has(`${s.matchId}|${s.market}|${s.selection}`) && liveOdds.get(`${s.matchId}|${s.market}|${s.selection}`)?.trend === 'down' && (
+                  <span className="text-red-500 font-bold text-xs">▼</span>
+                )}
+              </div>
             </div>
           </div>
         ))}
@@ -133,6 +163,18 @@ export default function BetSlip() {
         {error && (
           <div className="bg-neon-red/10 border border-neon-red/30 text-neon-red p-2 rounded-lg text-xs text-center animate-slide-up">
             {error}
+          </div>
+        )}
+
+        {oddsConflict.length > 0 && (
+          <div className="bg-yellow-500/10 border border-yellow-500/30 text-yellow-500 p-2 rounded-lg text-[10px] space-y-1">
+            <p className="font-bold text-center mb-1">Cotele s-au schimbat:</p>
+            {oddsConflict.map((c, i) => (
+              <div key={i} className="flex justify-between">
+                <span>{c.market} {c.selection}:</span>
+                <span>{Number(c.oldOdds ?? 0).toFixed(2)} → {Number(c.newOdds ?? 0).toFixed(2)}</span>
+              </div>
+            ))}
           </div>
         )}
 

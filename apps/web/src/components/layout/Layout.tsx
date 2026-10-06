@@ -6,8 +6,11 @@ import BetSlipInline from '../BetSlipInline';
 import { useState, useEffect } from 'react';
 import { useIOS } from '../../hooks/useIOS';
 import { useBetSlip } from '../../store/betSlip';
+import { useOddsStream } from '../../hooks/useOddsStream';
 
 export default function Layout() {
+  useOddsStream();
+
   const [isMobile, setIsMobile] = useState(false);
   const { isIOS, isSafari, hasNotch } = useIOS();
   const location = useLocation();
@@ -113,7 +116,7 @@ export default function Layout() {
           style={{ bottom: 'calc(5.5rem + env(safe-area-inset-bottom))' }}
         >
           🎟️ <span>{selections.length}</span>
-          <span className="text-sm">· {(stake * totalOdds()).toFixed(0)} CR</span>
+          <span className="text-sm">· {(stake * totalOdds()).toFixed(2)} CR</span>
         </button>
       )}
 

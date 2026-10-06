@@ -2,6 +2,8 @@ import { prisma } from '../lib/prisma';
 import { env, SCOREABLE_MATCH_STATUSES } from '../config/env';
 import { Prisma } from '@prisma/client';
 import { serializeMatch } from '../lib/match.serializer';
+import { settleRunning } from '../lib/settlement-lock';
+import { oddsEvents } from '../lib/odds-events';
 
 // Odds.value is @db.Decimal, so Prisma hands it back as a Decimal that
 // serialises to a JSON string ("1.90"). The UI calls .toFixed() on it, which
@@ -27,10 +29,8 @@ export const matchService = {
   },
 
 
-  async listUpcoming(limit: number = 20, cursor?: string) {
+  async listUpcoming(limit: number = 20, cursor?: string, isAdmin: boolean = false) {
     const now = new Date();
-    // Typed with its return type rather than Prisma.MatchFindManyArgs so the
-    // `include` survives inference and `odds` is visible on each match.
     const query: Prisma.MatchFindManyArgs & { include: { odds: true, homeTeam: true, awayTeam: true, competition: true } } = {
       where: {
         matchDate: { gte: now },
@@ -48,18 +48,29 @@ export const matchService = {
 
     const matches = await prisma.match.findMany(query);
     const hasMore = matches.length > limit;
-    const items = (hasMore ? matches.slice(0, limit) : matches).map((m) => ({
-      ...serializeMatch(m),
-      odds: mapOdds(m.odds),
-    }));
+
+    const items = (hasMore ? matches.slice(0, limit) : matches).map((m) => {
+      let odds = mapOdds(m.odds);
+      if (!isAdmin) {
+        odds = odds.filter(o => o.enabled);
+      }
+      return {
+        ...serializeMatch(m),
+        odds,
+      };
+    });
+
+    const filteredItems = isAdmin
+      ? items
+      : items.filter(m => m.odds.length > 0);
 
     return {
-      items,
-      nextCursor: hasMore ? items[items.length - 1].id : null,
+      items: filteredItems,
+      nextCursor: hasMore ? items[items.length - 1]?.id : null,
     };
   },
 
-  async listLive(limit: number = 50) {
+  async listLive(limit: number = 50, isAdmin: boolean = false) {
     const now = new Date();
     const matches = await prisma.match.findMany({
       where: {
@@ -72,31 +83,51 @@ export const matchService = {
       orderBy: { matchDate: 'desc' },
       take: limit,
     });
-    return matches.map((m) => ({
-      ...serializeMatch(m),
-      odds: mapOdds(m.odds),
-    }));
+
+    return matches.map((m) => {
+      let odds = mapOdds(m.odds);
+      if (!isAdmin) {
+        odds = odds.filter(o => o.enabled);
+      }
+      return {
+        ...serializeMatch(m),
+        odds,
+      };
+    }).filter(m => isAdmin || m.odds.length > 0);
   },
 
-  async getById(id: string) {
+  async getById(id: string, isAdmin: boolean = false) {
     const match = await prisma.match.findUnique({
       where: { id },
       include: { odds: true, homeTeam: true, awayTeam: true, competition: true },
     });
     if (!match) throw new Error('Match not found');
-    return { ...serializeMatch(match), odds: mapOdds(match.odds) };
+
+    let odds = mapOdds(match.odds);
+    if (!isAdmin) {
+      odds = odds.filter(o => o.enabled);
+    }
+
+    return { ...serializeMatch(match), odds };
   },
 
   // Admin panel listing: every match regardless of status, no pagination.
-  async listAll() {
+  async listAll(isAdmin: boolean = false) {
     const matches = await prisma.match.findMany({
       include: { odds: true, homeTeam: true, awayTeam: true, competition: true },
       orderBy: { matchDate: 'desc' },
     });
-    return matches.map((m) => ({
-      ...serializeMatch(m),
-      odds: mapOdds(m.odds),
-    }));
+
+    return matches.map((m) => {
+      let odds = mapOdds(m.odds);
+      if (!isAdmin) {
+        odds = odds.filter(o => o.enabled);
+      }
+      return {
+        ...serializeMatch(m),
+        odds,
+      };
+    }).filter(m => isAdmin || m.odds.length > 0);
   },
 
   async createManual(data: {
@@ -112,19 +143,22 @@ export const matchService = {
       throw new Error('Home and away teams must be different');
     }
 
+    const competitionId = data.competitionId?.trim() || undefined;
+    const league = data.league?.trim() || undefined;
+
     // Validate: at least one of competitionId or league is provided
-    if (!data.competitionId && !data.league) {
+    if (!competitionId && !league) {
       throw new Error('Either competitionId or league must be provided');
     }
 
     // Validate: if competitionId is provided, ensure it exists
     let competition = null;
-    if (data.competitionId) {
+    if (competitionId) {
       competition = await prisma.competition.findUnique({
-        where: { id: data.competitionId },
+        where: { id: competitionId },
       });
       if (!competition) {
-        throw new Error(`Competition not found: ${data.competitionId}`);
+        throw new Error(`Competition not found: ${competitionId}`);
       }
     }
 
@@ -154,20 +188,18 @@ export const matchService = {
     const { fromZonedTime } = await import('date-fns-tz');
     const utcMatchDate = fromZonedTime(data.matchDate, 'Europe/Bucharest');
 
-    const newMatch = await prisma.match.create({
-      data: {
-        externalId,
-        homeTeamId: data.homeTeamId,
-        awayTeamId: data.awayTeamId,
-        competitionId: data.competitionId ?? null,
-        league: data.league ?? null,
-        matchday: data.matchday,
-        matchDate: utcMatchDate,
-        status: 'SCHEDULED',
-        // homeCrest and awayCrest are removed; they are now derived from teams
-        // league: if provided, stored directly; else derived from competition (if any)
-      },
-    });
+    const newMatchData: Prisma.MatchUncheckedCreateInput = {
+      externalId,
+      homeTeamId: data.homeTeamId,
+      awayTeamId: data.awayTeamId,
+      competitionId: competitionId ?? null,
+      league: league ?? null,
+      matchday: data.matchday,
+      matchDate: utcMatchDate,
+      status: 'SCHEDULED',
+    };
+
+    const newMatch = await prisma.match.create({ data: newMatchData });
 
     await this.generateOdds(newMatch.id);
 
@@ -193,8 +225,30 @@ export const matchService = {
     // Scoring a voided match would silently re-admit it to accumulators. The
     // operator has to explicitly lift the void first.
     if (existing.status === 'VOID') throw new Error('Jogo marcado como VOID - anula o VOID antes de atualizar o resultado');
-    // Prevent updating the score of a finished match (immutability requirement)
-    if (existing.status === 'FINISHED') throw new Error('Não é possível atualizar o resultado de um jogo terminado');
+    // A FINISHED match may still be corrected, but only while nothing has been
+    // paid out on it. Once settlement has decided any ticket that holds a leg on
+    // this match (WON/LOST), those flags and balances were computed from the old
+    // score and nothing here would redo them, so the result is frozen.
+    // CANCELLED tickets were refunded regardless of the result, and PENDING
+    // tickets have not used it yet, so neither blocks a correction.
+    if (existing.status === 'FINISHED') {
+      // Settlement writes ticket status and balances in one run; correcting the
+      // score while it is in flight could slip between its read and its write.
+      if (settleRunning) {
+        throw new Error('Settlement em curso - tenta novamente dentro de instantes');
+      }
+      const settledTickets = await prisma.bet.count({
+        where: {
+          status: { in: ['WON', 'LOST'] },
+          selections: { some: { matchId: id } },
+        },
+      });
+      if (settledTickets > 0) {
+        throw new Error(
+          `Não é possível corrigir o resultado: ${settledTickets} aposta(s) neste jogo já foram decididas (settlement executado).`
+        );
+      }
+    }
 
     await prisma.match.update({
       where: { id },
@@ -317,4 +371,114 @@ export const matchService = {
     await prisma.odds.createMany({ data: oddsToCreate });
   },
 
-};
+  async updateOdds(matchId: string, adminId: string, changes: Array<{ market: string, selection: string, value?: number, enabled?: boolean }>) {
+    return await prisma.$transaction(async (tx) => {
+      const match = await tx.match.findUnique({ where: { id: matchId } });
+      if (!match) throw new Error('Match not found');
+      if (match.status !== 'SCHEDULED') throw new Error('Only scheduled matches can have odds edited');
+      if (new Date(match.matchDate).getTime() <= Date.now()) throw new Error('Match has already started');
+
+      const results = [];
+      for (const change of changes) {
+        const odd = await tx.odds.findUnique({
+          where: { matchId_market_selection: { matchId, market: change.market, selection: change.selection } }
+        });
+        if (!odd) throw new Error(`Odds not found for ${change.market} ${change.selection}`);
+
+        const oldValue = Number(odd.value);
+        const oldEnabled = odd.enabled;
+        const newValue = change.value !== undefined ? Math.round(change.value * 100) / 100 : oldValue;
+        const newEnabled = change.enabled !== undefined ? change.enabled : oldEnabled;
+
+        if (newValue === oldValue && newEnabled === oldEnabled) continue;
+
+        const originalValue = odd.originalValue ?? odd.value;
+
+        await tx.odds.update({
+          where: { id: odd.id },
+          data: {
+            value: newValue,
+            enabled: newEnabled,
+            originalValue,
+            source: 'manual'
+          }
+        });
+
+        await tx.oddsChange.create({
+          data: {
+            matchId,
+            market: change.market,
+            selection: change.selection,
+            oldValue: oldValue,
+            newValue: newValue,
+            oldEnabled,
+            newEnabled,
+            adminId
+          }
+        });
+        results.push({ market: change.market, selection: change.selection });
+        oddsEvents.emit('oddsUpdate', {
+          matchId,
+          market: change.market,
+          selection: change.selection,
+          value: newValue,
+          enabled: newEnabled
+        });
+      }
+      return results;
+    });
+  },
+
+  async resetOdds(matchId: string, adminId: string) {
+    return await prisma.$transaction(async (tx) => {
+      const odds = await tx.odds.findMany({ where: { matchId, source: 'manual' } });
+      const results = [];
+      for (const odd of odds) {
+        const originalValue = odd.originalValue;
+        if (originalValue === null) continue;
+
+        const oldValue = Number(odd.value);
+        const oldEnabled = odd.enabled;
+
+        await tx.odds.update({
+          where: { id: odd.id },
+          data: {
+            value: originalValue,
+            source: 'estimated',
+            enabled: true
+          }
+        });
+
+        await tx.oddsChange.create({
+          data: {
+            matchId,
+            market: odd.market,
+            selection: odd.selection,
+            oldValue,
+            newValue: Number(originalValue),
+            oldEnabled,
+            newEnabled: true,
+            adminId
+          }
+        });
+        results.push({ market: odd.market, selection: odd.selection });
+        oddsEvents.emit('oddsUpdate', {
+          matchId,
+          market: odd.market,
+          selection: odd.selection,
+          value: Number(originalValue),
+          enabled: true
+        });
+      }
+      return results;
+    });
+  },
+
+  async getOddsHistory(matchId: string) {
+    return await prisma.oddsChange.findMany({
+      where: { matchId },
+      include: { admin: { select: { name: true } } },
+      orderBy: { createdAt: 'desc' }
+    });
+  },
+}

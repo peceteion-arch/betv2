@@ -37,7 +37,7 @@ export default function Rankings() {
             <div key={player.id} className={`card-bet p-5 text-center ${i === 0 ? 'border-neon-yellow/30' : ''}`}>
               <div className="text-4xl mb-2">{medals[i]}</div>
               <p className="font-bold">{player.name}</p>
-              <p className="text-2xl font-black text-neon-green mt-1">{player.balance.toFixed(0)}</p>
+              <p className="text-2xl font-black text-neon-green mt-1">{player.balance.toFixed(2)}</p>
               <p className="text-[10px] text-gray-500">CRÉDITOS</p>
             </div>
           ))}

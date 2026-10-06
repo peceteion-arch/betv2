@@ -2,6 +2,7 @@ import { prisma } from '../lib/prisma';
 import { notificationService } from './notification.service';
 import { userService } from './user.service';
 import { evaluateBet, describeVoids } from '../lib/settlement';
+import { serializeMatch } from '../lib/match.serializer';
 import { Prisma } from '@prisma/client';
 
 // stake/totalOdds/potentialReturn and BetSelection.odds are @db.Decimal, so
@@ -13,7 +14,12 @@ const mapBet = (bet: any) => ({
   totalOdds: Number(bet.totalOdds),
   potentialReturn: Number(bet.potentialReturn),
   ...(bet.selections && {
-    selections: bet.selections.map((s: any) => ({ ...s, odds: Number(s.odds) })),
+    selections: bet.selections.map((s: any) => ({
+      ...s,
+      odds: Number(s.odds),
+      oddsEnabled: s.oddsEnabled ?? true,
+      match: s.match ? serializeMatch(s.match) : null
+    })),
   }),
 });
 
@@ -23,6 +29,15 @@ const round2 = (n: number) => Math.round(n * 100) / 100;
 // open. Same rule placeBet applies, and it is deliberately NOT left to the
 // UI: the button is trivially bypassed, and a ticket whose only losing leg
 // has already been played must never be refundable.
+
+export class OddsChangedError extends Error {
+  constructor(public changes: Array<{ matchId: string, market: string, selection: string, oldOdds: number, newOdds: number, available: boolean }>) {
+    super('Cotele s-au schimbat');
+    Object.setPrototypeOf(this, OddsChangedError.prototype);
+    this.name = 'OddsChangedError';
+  }
+}
+
 export class BetCancelConflictError extends Error {
   constructor(message: string) {
     super(message);
@@ -56,6 +71,13 @@ export const betService = {
       if (stake <= 0) throw new Error('Stake deve ser superior a 0');
       if (Number(user.balance) < stake) throw new Error('Saldo insuficiente');
 
+      const changes: Array<{ matchId: string, market: string, selection: string, oldOdds: number, newOdds: number, available: boolean }> = []; // fields required by client contract
+
+      const round2Client = (n: number) => round2(n);
+
+      const normalizeOdds = (n: number) => round2(Number(n));
+
+      const toClient = (n: number) => normalizeOdds(n);
       const seen = new Set<string>();
 
       for (const s of selections) {
@@ -73,6 +95,17 @@ export const betService = {
         });
         if (!dbOdd) throw new Error(`Odds not found for ${s.selection} in ${s.market}`);
 
+        if (!dbOdd.enabled || round2(Number(dbOdd.value)) < round2(s.odds)) {
+          changes.push({
+            matchId: s.matchId,
+            market: s.market,
+            selection: s.selection,
+            oldOdds: s.odds,
+            newOdds: dbOdd.enabled ? normalizeOdds(dbOdd.value as any) : 0,
+            available: dbOdd.enabled,
+          });
+        }
+
         const key = `${s.matchId}-${s.market}`;
         if (seen.has(key)) throw new Error(`Duplicate selection: ${s.market} on match ${s.matchId}`);
         seen.add(key);
@@ -83,6 +116,10 @@ export const betService = {
           selection: s.selection,
           odds: Number(dbOdd.value),
         });
+      }
+
+      if (changes.length > 0) {
+        throw new OddsChangedError(changes);
       }
 
       const totalOdds = round2(lockedSelections.reduce((acc, s) => acc * s.odds, 1));
@@ -166,7 +203,7 @@ export const betService = {
     const result = await prisma.$transaction(async (tx) => {
       const bet = await tx.bet.findUnique({
         where: { id: betId },
-        include: { selections: { include: { match: { select: { status: true, matchDate: true } } } } },
+        include: { selections: { include: { match: { include: { homeTeam: true, awayTeam: true, competition: true } } } } },
       });
       if (!bet) throw new Error('Bet not found');
       if (bet.userId !== userId) throw new Error('Not your bet');

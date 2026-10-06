@@ -7,7 +7,7 @@ export interface SerializedMatch {
   externalId: string;
   homeTeamId: string;
   awayTeamId: string;
-  competitionId: string;
+  competitionId: string | null;
   matchday: number;
   matchDate: Date;
   status: string;

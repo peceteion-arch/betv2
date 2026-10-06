@@ -5,7 +5,7 @@ describe('Zod schemas', () => {
     const { placeBetSchema } = await import('../src/config/env');
     const result = placeBetSchema.safeParse({
       stake: 10,
-      selections: [{ matchId: 'cm123', market: '1X2', selection: '1' }],
+      selections: [{ matchId: 'cm123', market: '1X2', selection: '1', odds: 1.9 }],
     });
     expect(result.success).toBe(true);
   });
@@ -20,7 +20,7 @@ describe('Zod schemas', () => {
     const { placeBetSchema } = await import('../src/config/env');
     const result = placeBetSchema.safeParse({
       stake: 0,
-      selections: [{ matchId: 'cm1', market: '1X2', selection: '1' }],
+      selections: [{ matchId: 'cm1', market: '1X2', selection: '1', odds: 1.9 }],
     });
     expect(result.success).toBe(false);
   });

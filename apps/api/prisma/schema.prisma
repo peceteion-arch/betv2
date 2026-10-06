@@ -26,6 +26,7 @@ model User {
   groupMembers    GroupMember[]
   notifications   Notification[]
   groupsOwned     Group[]          @relation("GroupAdmin")
+  oddsChanges     OddsChange[]
 
   @@map("users")
 }
@@ -76,7 +77,7 @@ model Match {
 
   homeTeam      Team        @relation("HomeTeam", fields: [homeTeamId], references: [id], onDelete: Restrict)
   awayTeam      Team        @relation("AwayTeam", fields: [awayTeamId], references: [id], onDelete: Restrict)
-  competition   Competition @relation("CompetitionMatches", fields: [competitionId], references: [id], onDelete: Restrict)
+  competition   Competition? @relation("CompetitionMatches", fields: [competitionId], references: [id], onDelete: Restrict)
 
   odds          Odds[]
   betSelections BetSelection[]
@@ -90,19 +91,39 @@ model Match {
 }
 
 model Odds {
-  id          String   @id @default(cuid())
-  matchId     String   @map("match_id")
-  market      String
-  selection   String
-  value       Decimal  @db.Decimal(10, 2)
-  source      String   @default("estimated")
-  updatedAt   DateTime @updatedAt @map("updated_at")
+  id            String   @id @default(cuid())
+  matchId       String   @map("match_id")
+  market        String
+  selection     String
+  value         Decimal  @db.Decimal(10, 2)
+  originalValue Decimal? @db.Decimal(10, 2) @map("original_value")
+  enabled       Boolean  @default(true)
+  source        String   @default("estimated")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
   match       Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
 
   @@unique([matchId, market, selection])
   @@index([matchId])
   @@map("odds")
+}
+
+model OddsChange {
+  id         String   @id @default(cuid())
+  matchId    String   @map("match_id")
+  market     String
+  selection  String
+  oldValue   Decimal? @db.Decimal(10, 2) @map("old_value")
+  newValue   Decimal? @db.Decimal(10, 2) @map("new_value")
+  oldEnabled Boolean
+  newEnabled Boolean
+  adminId    String   @map("admin_id")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  admin User @relation(fields: [adminId], references: [id])
+
+  @@index([matchId])
+  @@map("odds_changes")
 }
 
 model Bet {

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../lib/api';
 import { useBetSlip } from '../store/betSlip';
+import { useAuth } from '../lib/auth';
 import BetSlip from '../components/BetSlip';
 
 const MARKET_LABELS: Record<string, string> = {
@@ -41,14 +42,23 @@ interface MatchData {
   status: string;
   homeScore: number | null;
   awayScore: number | null;
-  odds: Array<{ id: string; market: string; selection: string; value: number }>;
+  odds: Array<{ id: string; market: string; selection: string; value: number; enabled: boolean; source: string }>;
 }
 
 export default function MatchDetail() {
   const { id } = useParams();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN';
   const [match, setMatch] = useState<MatchData | null>(null);
   const [loading, setLoading] = useState(true);
   const { addSelection, removeSelection, selections, stake, totalOdds, setSheetOpen } = useBetSlip();
+
+  // Admin Edit State
+  const [isEditing, setIsEditing] = useState(false);
+  const [draftOdds, setDraftOdds] = useState<Record<string, any>>({});
+  const [history, setHistory] = useState<any[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [resetting, setResetting] = useState(false);
 
   useEffect(() => {
     if (id) {
@@ -58,7 +68,16 @@ export default function MatchDetail() {
     }
   }, [id]);
 
+  useEffect(() => {
+    if (id && isAdmin) {
+      api.get(`/matches/${id}/odds/history`)
+        .then((r) => setHistory(r.data))
+        .catch(() => {});
+    }
+  }, [id, isAdmin]);
+
   const handleOddsClick = (market: string, selection: string, odds: number) => {
+    if (isEditing) return;
     if (!canBet) return;
     const exists = selections.find((s) => s.matchId === match.id && s.market === market && s.selection === selection);
     if (exists) {
@@ -68,10 +87,57 @@ export default function MatchDetail() {
     }
   };
 
+  const saveOdds = async () => {
+    setSaving(true);
+    try {
+      const changes = Object.entries(draftOdds).map(([key, val]: [string, any]) => {
+        const [market, selection] = key.split('|');
+        return { market, selection, ...val };
+      });
+      await api.patch(`/matches/${id}/odds`, { changes });
+      setIsEditing(false);
+      setDraftOdds({});
+      // Refresh match and history
+      const r = await api.get(`/matches/${id}`);
+      setMatch(r.data);
+      const h = await api.get(`/matches/${id}/odds/history`);
+      setHistory(h.data);
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Erro ao salvar cotele');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const resetOdds = async () => {
+    if (!window.confirm('Resetați toate cotele manuale la valorile automate?')) return;
+    setResetting(true);
+    try {
+      await api.post(`/matches/${id}/odds/reset`);
+      const r = await api.get(`/matches/${id}`);
+      setMatch(r.data);
+      const h = await api.get(`/matches/${id}/odds/history`);
+      setHistory(h.data);
+    } catch (err: any) {
+      alert(err.response?.data?.error || 'Erro ao reseta cotele');
+    } finally {
+      setResetting(false);
+    }
+  };
+
+  const handleEditToggle = (odd: any) => {
+    const key = `${odd.market}|${odd.selection}`;
+    setDraftOdds(prev => {
+      const current = prev[key] || { value: odd.value, enabled: odd.enabled };
+      return { ...prev, [key]: current };
+    });
+  };
+
+  
   const isSelected = (market: string, selection: string) =>
     match ? selections.some((s) => s.matchId === match.id && s.market === market && s.selection === selection) : false;
 
-  const canBet = match && match.status === 'SCHEDULED' && new Date(match.matchDate).getTime() > Date.now();
+const canBet = match && match.status === 'SCHEDULED' && new Date(match.matchDate).getTime() > Date.now();
 
   const groupedOdds = match?.odds?.reduce<Record<string, typeof match.odds>>((acc, odd) => {
     if (!acc[odd.market]) acc[odd.market] = [];
@@ -95,7 +161,7 @@ export default function MatchDetail() {
       >
         🎟️ Ver Bilhete
         <span>{selections.length}</span>
-        <span className="text-sm">· {(stake * totalOdds()).toFixed(0)} CR</span>
+        <span className="text-sm">· {(stake * totalOdds()).toFixed(2)} CR</span>
       </button>
     </div>
   ) : null;
@@ -136,6 +202,25 @@ export default function MatchDetail() {
             <span className="ml-2 text-[10px] text-neon-blue">{match.groupStage.replace('GROUP_', 'Grupo ')}</span>
           )}
         </div>
+
+        {/* Admin Actions */}
+        {isAdmin && (
+          <div className="flex gap-2 mb-4">
+            <button
+              onClick={() => setIsEditing(!isEditing)}
+              className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${isEditing ? 'bg-neon-red text-white' : 'bg-bet-700 text-gray-400'}`}
+            >
+              {isEditing ? '❌ Anulează' : '✏️ Editează cote'}
+            </button>
+            <button
+              onClick={resetOdds}
+              disabled={resetting}
+              className="px-3 py-2 bg-bet-800 text-gray-400 rounded-lg text-xs hover:text-white transition-colors disabled:opacity-50"
+            >
+              {resetting ? '...' : '🔄 Resetează'}
+            </button>
+          </div>
+        )}
 
         {/* Teams */}
         <div className="flex items-center justify-between gap-2">
@@ -210,9 +295,44 @@ export default function MatchDetail() {
       {/* Markets */}
       {groupedOdds && Object.entries(groupedOdds).map(([market, odds]: [string, any]) => (
         <div key={market} className="card-bet p-4">
-          <h3 className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-3">
-            {MARKET_LABELS[market] || market.replace(/_/g, ' ')}
-          </h3>
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-[10px] font-bold uppercase tracking-wider text-gray-500">
+              {MARKET_LABELS[market] || market.replace(/_/g, ' ')}
+            </h3>
+            {isAdmin && isEditing && (
+              <label className="flex items-center gap-1.5 text-[9px] text-gray-400 cursor-pointer select-none">
+                <span>Piață activă</span>
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    className="sr-only"
+                    checked={draftOdds[market]?._marketEnabled ?? odds.every((o: any) => o.enabled)}
+                    onChange={(e) => {
+                      setDraftOdds((prev: any) => {
+                        const marketEnabled = e.target.checked;
+                        const next = { ...prev, [market]: { ...prev[market], _marketEnabled: marketEnabled } };
+                        odds.forEach((o: any) => {
+                          next[`${market}|${o.selection}`] = { ...next[`${market}|${o.selection}`], enabled: marketEnabled };
+                        });
+                        return next;
+                      });
+                    }}
+                  />
+                  <span
+                    className={`inline-block w-6 h-3.5 rounded-full transition-colors ${
+                      (draftOdds[market]?._marketEnabled ?? odds.every((o: any) => o.enabled)) ? 'bg-neon-green' : 'bg-gray-600'
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 left-0.5 w-2.5 h-2.5 bg-white rounded-full transition-transform ${
+                        (draftOdds[market]?._marketEnabled ?? odds.every((o: any) => o.enabled)) ? 'translate-x-3' : ''
+                      }`}
+                    />
+                  </span>
+                </div>
+              </label>
+            )}
+          </div>
           <div className={`grid gap-1.5 ${market === 'RESULTADO_CORRETO' ? 'grid-cols-3' : odds.length <= 3 ? 'grid-cols-3' : 'grid-cols-2'}`}>
             {odds.map((odd: any) => {
               const sel = isSelected(market, odd.selection);
@@ -220,26 +340,60 @@ export default function MatchDetail() {
               if (market === '1X2') {
                 label = odd.selection === '1' ? match.homeTeam : odd.selection === 'X' ? 'Empate' : match.awayTeam;
               }
+
+              const draft = draftOdds[`${market}|${odd.selection}`];
+
               return (
-                <button
-                  key={odd.id}
-                  onClick={() => handleOddsClick(market, odd.selection, odd.value)}
-                  disabled={!canBet}
-                  className={`py-2.5 rounded-lg text-center transition-all ${
-                    !canBet
-                      ? 'bg-bet-700/50 cursor-not-allowed opacity-50'
-                      : sel
-                        ? 'bg-neon-green text-black active:scale-95'
-                        : 'bg-bet-700 hover:bg-bet-600 active:scale-95'
-                  }`}
-                >
-                  <p className={`text-[9px] uppercase truncate ${sel ? 'text-black/60' : 'text-gray-500'}`}>
-                    {label}
-                  </p>
-                  <p className={`text-xs font-bold ${sel ? 'text-black' : canBet ? 'text-white' : 'text-gray-500'}`}>
-                    {Number(odd.value).toFixed(2)}
-                  </p>
-                </button>
+                <div key={odd.id} className="relative group">
+                  {isEditing && isAdmin ? (
+                    <div className="flex flex-col gap-1 p-1 bg-bet-800 rounded-lg border border-bet-600">
+                      <div className="flex items-center justify-between gap-1">
+                        <input
+                          type="number"
+                          step="0.01"
+                          className="w-full bg-transparent text-center text-xs font-bold text-white outline-none"
+                          value={draft?.value ?? odd.value}
+                          onChange={(e) => setDraftOdds(prev => ({
+                            ...prev,
+                            [`${market}|${odd.selection}`]: { ...draft, value: Number(e.target.value) }
+                          }))}
+                        />
+                        <input
+                          type="checkbox"
+                          className="w-3 h-3 accent-neon-green"
+                          checked={draft?.enabled ?? odd.enabled}
+                          onChange={(e) => setDraftOdds(prev => ({
+                            ...prev,
+                            [`${market}|${odd.selection}`]: { ...draft, enabled: e.target.checked }
+                          }))}
+                        />
+                      </div>
+                      <p className="text-[8px] text-center text-gray-500 truncate">{label}</p>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => handleOddsClick(market, odd.selection, odd.value)}
+                      disabled={!canBet}
+                      className={`w-full py-2.5 rounded-lg text-center transition-all ${
+                        !canBet
+                          ? 'bg-bet-700/50 cursor-not-allowed opacity-50'
+                          : sel
+                            ? 'bg-neon-green text-black active:scale-95'
+                            : 'bg-bet-700 hover:bg-bet-600 active:scale-95'
+                      } ${!odd.enabled && !isAdmin ? 'opacity-30 pointer-events-none' : ''}`}
+                    >
+                      <p className={`text-[9px] uppercase truncate ${sel ? 'text-black/60' : 'text-gray-500'}`}>
+                        {label}
+                      </p>
+                      <p className={`text-xs font-bold ${sel ? 'text-black' : canBet ? 'text-white' : 'text-gray-500'}`}>
+                        {Number(odd.value).toFixed(2)}
+                      </p>
+                      {odd.source === 'manual' && isAdmin && (
+                        <span className="absolute -top-1 -right-1 text-[8px]">🔒</span>
+                      )}
+                    </button>
+                  )}
+                </div>
               );
             })}
           </div>
@@ -250,6 +404,58 @@ export default function MatchDetail() {
       <div className="hidden lg:block">
         <BetSlip />
       </div>
+
+      {/* Admin History Panel */}
+      {isAdmin && !isEditing && (
+        <div className="card-bet p-4 mt-6">
+          <h3 className="text-[10px] font-bold uppercase tracking-wider text-gray-500 mb-3">Istoric Modificări</h3>
+          <div className="space-y-2">
+            {history.length === 0 ? (
+              <p className="text-xs text-gray-600 text-center py-4">Nu există modificări manuale</p>
+            ) : (
+              history.map((h, i) => (
+                <div key={i} className="flex items-center justify-between p-2 bg-bet-800 rounded-lg text-[10px]">
+                  <div className="flex-1">
+                    <span className="text-gray-500">{h.admin?.name}</span>
+                    <span className="mx-2 text-gray-700">→</span>
+                    <span className="text-white font-semibold">{h.market} {h.selection}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-gray-500">{Number(h.oldValue || 0).toFixed(2)}</span>
+                    <span className="mx-1">→</span>
+                    <span className="text-neon-green font-bold">{Number(h.newValue || 0).toFixed(2)}</span>
+                    <span className="ml-2 text-gray-600">{new Date(h.createdAt).toLocaleDateString()}</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Admin Edit Footer */}
+      {isAdmin && isEditing && (
+        <div className="fixed bottom-0 left-0 right-0 bg-bet-900 border-t border-bet-700 p-4 z-50 flex items-center justify-between shadow-2xl animate-slide-up">
+          <div className="text-xs text-gray-400">
+            Modificări: <span className="text-white font-bold">{Object.keys(draftOdds).length}</span>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={() => { setIsEditing(false); setDraftOdds({}); }}
+              className="px-4 py-2 text-xs font-bold text-gray-400 hover:text-white transition-colors"
+            >
+              Anulează
+            </button>
+            <button
+              onClick={saveOdds}
+              disabled={saving || Object.keys(draftOdds).length === 0}
+              className="px-6 py-2 bg-neon-green text-black rounded-lg text-xs font-bold active:scale-95 disabled:opacity-50 transition-all"
+            >
+              {saving ? 'Se salvează...' : `Salvează (${Object.keys(draftOdds).length})`}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

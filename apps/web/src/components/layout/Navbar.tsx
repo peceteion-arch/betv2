@@ -55,7 +55,7 @@ export default function Navbar({ isMobile }: NavbarProps) {
         {/* Mobile balance */}
         {isMobile && (
           <div className="flex items-center gap-1 bg-bet-700/80 rounded-lg px-2 py-1">
-            <span className="text-neon-green font-bold text-xs">{user?.balance?.toFixed(0)}</span>
+            <span className="text-neon-green font-bold text-xs">{user?.balance?.toFixed(2)}</span>
             <span className="text-[8px] text-gray-500">CR</span>
           </div>
         )}

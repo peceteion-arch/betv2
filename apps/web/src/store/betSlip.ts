@@ -7,6 +7,7 @@ interface BetSelection {
   market: string;
   selection: string;
   odds: number;
+  oddsEnabled?: boolean;
 }
 
 interface BetSlipStore {
@@ -21,6 +22,7 @@ interface BetSlipStore {
   setSheetOpen: (open: boolean) => void;
   clear: () => void;
   totalOdds: () => number;
+  updateOdds: (matchId: string, market: string, selection: string, odds: number) => void;
 }
 
 const round2 = (value: number) => Math.round(value * 100) / 100;
@@ -67,6 +69,16 @@ export const useBetSlip = create<BetSlipStore>((set, get) => {
       const { selections } = get();
       const raw = selections.reduce((acc, s) => acc * s.odds, 1);
       return round2(raw);
+    },
+
+    updateOdds: (matchId: string, market: string, selection: string, odds: number) => {
+      set((state) => ({
+        selections: state.selections.map((s) =>
+          s.matchId === matchId && s.market === market && s.selection === selection
+            ? { ...s, odds }
+            : s
+        ),
+      }));
     },
   };
 });

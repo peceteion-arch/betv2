@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { betService, BetCancelConflictError } from '../services/bet.service';
+import { betService, BetCancelConflictError, OddsChangedError } from '../services/bet.service';
 import { authenticate, requireAdmin } from '../middleware/auth';
 import { validate } from '../middleware/validation';
 import { placeBetSchema, paginationSchema } from '../config/env';
@@ -13,6 +13,12 @@ router.post('/', authenticate, validate(placeBetSchema), async (req: AuthRequest
     const bet = await betService.placeBet(req.userId!, req.body.stake, req.body.selections);
     res.status(201).json(bet);
   } catch (error: unknown) {
+    if (error instanceof OddsChangedError) {
+      return res.status(409).json({
+        error: error.message,
+        changes: error.changes
+      });
+    }
     const message = error instanceof Error ? error.message : 'Erro ao colocar aposta';
     res.status(400).json({ error: message });
   }

@@ -12,15 +12,17 @@ interface BetSlipInlineProps {
 // empty state — the floating button that opens the sheet only renders when
 // there is at least one selection, so "no selections" is unreachable here.
 export default function BetSlipInline({ onSuccess }: BetSlipInlineProps) {
-  const { selections, stake, setStake, totalOdds, clear, removeSelection } = useBetSlip();
+  const { selections, stake, setStake, totalOdds, clear, removeSelection, updateOdds } = useBetSlip();
   const { user, refreshUser } = useAuth();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [error, setError] = useState('');
+  const [oddsConflict, setOddsConflict] = useState<{ oldOdds: number, newOdds: number, matchId: string, market: string, selection: string }[]>([]);
 
   const handlePlaceBet = async () => {
     if (selections.length === 0 || stake <= 0) return;
     setError('');
+    setOddsConflict([]);
     setLoading(true);
     try {
       await api.post('/bets', {
@@ -40,7 +42,20 @@ export default function BetSlipInline({ onSuccess }: BetSlipInlineProps) {
       // been on screen briefly — closing instantly would hide the feedback.
       setTimeout(() => onSuccess?.(), 600);
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Erro ao colocar aposta');
+      if (err.response?.status === 409 && err.response?.data?.changes) {
+        const changes = err.response.data.changes;
+        changes.forEach((c: any) => {
+          if (c.available) {
+            updateOdds(c.matchId, c.market, c.selection, c.newOdds);
+          } else {
+            removeSelection(c.matchId, c.market);
+          }
+        });
+        setError('Cotele s-au schimbat. Te rugăm să verifici biletul și să confirmi.');
+        setOddsConflict(changes);
+      } else {
+        setError(err.response?.data?.error || 'Erro ao colocar aposta');
+      }
     } finally {
       setLoading(false);
     }
@@ -120,6 +135,18 @@ export default function BetSlipInline({ onSuccess }: BetSlipInlineProps) {
         {error && (
           <div className="bg-neon-red/10 border border-neon-red/30 text-neon-red p-2 rounded-lg text-xs text-center animate-slide-up">
             {error}
+          </div>
+        )}
+
+        {oddsConflict.length > 0 && (
+          <div className="bg-yellow-500/10 border border-yellow-500/30 text-yellow-500 p-2 rounded-lg text-[10px] space-y-1">
+            <p className="font-bold text-center mb-1">Cotele s-au schimbat:</p>
+            {oddsConflict.map((c, i) => (
+              <div key={i} className="flex justify-between">
+                <span>{c.market} {c.selection}:</span>
+                <span>{Number(c.oldOdds ?? 0).toFixed(2)} → {Number(c.newOdds ?? 0).toFixed(2)}</span>
+              </div>
+            ))}
           </div>
         )}
 

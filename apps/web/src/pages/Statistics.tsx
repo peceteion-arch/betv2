@@ -17,7 +17,7 @@ export default function Statistics() {
         <div className="stat-card">
           <p className="text-[10px] uppercase tracking-wider text-gray-500 mb-2">Lucro Total</p>
           <p className={`text-4xl font-black ${(user?.profit || 0) >= 0 ? 'text-neon-green' : 'text-neon-red'}`}>
-            {(user?.profit || 0) >= 0 ? '+' : ''}{user?.profit?.toFixed(0)}
+            {(user?.profit || 0) >= 0 ? '+' : ''}{user?.profit?.toFixed(2)}
           </p>
           <p className="text-xs text-gray-500 mt-1">CRÉDITOS</p>
         </div>

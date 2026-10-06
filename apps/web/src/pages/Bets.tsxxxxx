@@ -236,7 +236,7 @@ export default function Bets() {
                 </div>
                 <div className="text-right">
                   <p className={`font-bold ${s.text}`}>
-                    {bet.status === 'WON' ? '+' : ''}{profit.toFixed(2)} CR
+                    {bet.status === 'WON' ? '+' : ''}{profit.toFixed(0)} CR
                   </p>
                   <p className="text-[10px] text-gray-600">Stake: {bet.stake} CR</p>
                 </div>

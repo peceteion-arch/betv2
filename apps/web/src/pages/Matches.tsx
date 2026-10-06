@@ -9,6 +9,7 @@ interface MatchOdds {
   market: string;
   selection: string;
   value: number;
+  enabled: boolean;
 }
 
 interface MatchItem {
@@ -89,7 +90,7 @@ export default function Matches() {
               filter === 'all' ? 'bg-neon-green text-black' : 'bg-bet-700 text-gray-400'
             }`}
           >
-            Todos
+            <span>Todos</span>
           </button>
           <button
             onClick={() => setFilter('live')}
@@ -98,7 +99,7 @@ export default function Matches() {
             }`}
           >
             {filter === 'live' && <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />}
-            Vivo
+            <span>Vivo</span>
           </button>
         </div>
       </div>
@@ -179,6 +180,7 @@ export default function Matches() {
                 {odds1x2.map((odd) => {
                   const sel = isSelected(match.id, '1X2', odd.selection);
                   const label = odd.selection === '1' ? match.homeTeam.slice(0, 8) : odd.selection === 'X' ? 'Empate' : match.awayTeam.slice(0, 8);
+                  if (!odd.enabled) return null;
                   return (
                     <button
                       key={odd.id}

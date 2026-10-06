@@ -41,6 +41,15 @@ export const placeBetSchema = z.object({
   })).min(1).max(20),
 });
 
+export const updateOddsSchema = z.object({
+  changes: z.array(z.object({
+    market: z.string(),
+    selection: z.string(),
+    value: z.number().min(1.01).max(1000).optional(),
+    enabled: z.boolean().optional(),
+  })).min(1),
+});
+
 export const updateProfileSchema = z.object({
   name: z.string().min(2).max(50).optional(),
   email: z.string().email().optional(),
@@ -58,10 +67,8 @@ const matchDateSchema = z.string().refine((v) => !Number.isNaN(Date.parse(v)), {
 export const createManualMatchSchema = z.object({
   homeTeamId: z.string(),
   awayTeamId: z.string(),
-  competitionId: z.string().optional(),
-  league: z.string().optional().refine((val) => val === undefined || val !== '', {
-    message: 'League name cannot be empty if provided'
-  }),
+  competitionId: z.preprocess((val) => (typeof val === 'string' && val.trim() === '' ? undefined : val), z.string().optional()),
+  league: z.preprocess((val) => (typeof val === 'string' && val.trim() === '' ? undefined : val), z.string().optional()),
   matchday: z.number().int().min(1),
   matchDate: matchDateSchema,
 });
