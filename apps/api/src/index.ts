@@ -69,7 +69,10 @@ app.use('/api/competitions', competitionRoutes);
 app.use('/api/odds', oddsRoutes);
 
 // Serve static uploads
-app.use('/uploads', express.static(join(__dirname, '../uploads')));
+app.use('/uploads', (req, res, next) => {
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  next();
+}, express.static(join(__dirname, '../uploads')));
 
 app.use('/api/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 app.get('/api/health', (_req, res) => {

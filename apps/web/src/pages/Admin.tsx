@@ -59,7 +59,7 @@ export default function Admin() {
     competitionId: '', league: '', matchDate: '', matchday: '1'
   });
   const [teamMap, setTeamMap] = useState<Record<string, string>>({});
-  const [competitionMap, setCompetitionMap] = useState<Record<string, string>>({});
+  const [competitions, setCompetitions] = useState<Array<{id: string; name: string; active: boolean}>>([]);
   const [scoreEdit, setScoreEdit] = useState<{
     matchId: string; homeScore: string; awayScore: string
   } | null>(null);
@@ -69,6 +69,11 @@ export default function Admin() {
   const [newTeam, setNewTeam] = useState({ name: '', logoUrl: '' });
   const [newTeamError, setNewTeamError] = useState('');
   const [newTeamLoading, setNewTeamLoading] = useState(false);
+  // Competition creation form state
+  const [showCreateCompetition, setShowCreateCompetition] = useState(false);
+  const [newCompetition, setNewCompetition] = useState({ name: '' });
+  const [competitionError, setCompetitionError] = useState('');
+  const [competitionLoading, setCompetitionLoading] = useState(false);
 
   const loadTeams = async () => {
     const r = await api.get('/teams');
@@ -92,11 +97,7 @@ export default function Admin() {
     api.get('/matches/all').then((r) => setMatches(r.data));
     loadTeams();
     api.get('/competitions').then((r) => {
-      const competitionMap: Record<string, string> = {};
-      r.data.forEach((c: any) => {
-        competitionMap[c.id] = c.name;
-      });
-      setCompetitionMap(competitionMap);
+      setCompetitions(r.data);
     });
   }, [user, tab]);
 
@@ -147,9 +148,7 @@ export default function Admin() {
     }
   };
 
-
-
-    const handleCreateTeam = async () => {
+  const handleCreateTeam = async () => {
     setNewTeamError('');
     const name = newTeam.name.trim();
     if (name.length < 2) {
@@ -172,13 +171,39 @@ export default function Admin() {
     }
   };
 
+  const handleCreateCompetition = async () => {
+    setCompetitionError('');
+    setCompetitionLoading(true);
+    try {
+      const name = newCompetition.name.trim();
+      if (!name) {
+        setCompetitionError('Numele competiției trebuie să fie completat');
+        return;
+      }
+      const r = await api.post('/competitions', { name });
+      // After successful creation, reload competitions
+      api.get('/competitions').then((res) => {
+        setCompetitions(res.data);
+        // Select the newly created competition in the matchForm
+        setMatchForm({ ...matchForm, competitionId: r.data.id });
+        // Close the form
+        setShowCreateCompetition(false);
+        setNewCompetition({ name: '' });
+      });
+    } catch (err: any) {
+      setCompetitionError(err.response?.data?.error || 'Eroare la crearea competiției');
+    } finally {
+      setCompetitionLoading(false);
+    }
+  };
+
   const handleCreateMatch = async () => {
     setMatchError('');
     setMatchLoading(true);
     try {
       // Validate required fields
-      if (!matchForm.homeTeamId || !matchForm.awayTeamId || (!matchForm.competitionId && (!matchForm.league || !matchForm.league.trim()))) {
-        setMatchError('Selectează o competiție sau introdu numele ligii');
+      if (!matchForm.homeTeamId || !matchForm.awayTeamId || !matchForm.competitionId) {
+        setMatchError('Selectează o competiție');
         return;
       }
       const matchdayNum = Number(matchForm.matchday);
@@ -451,27 +476,60 @@ export default function Admin() {
               </div>
               <div>
                 <div className="relative">
-                  <input
+                  <select
                     className="input-bet"
-                    list="competitionList"
-                    placeholder="Liga (ex: Minifotbal) sau scrie orice nume"
-                    value={matchForm.competitionId || matchForm.league || ''}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      // Check if it's an existing competition ID
-                      if (competitionMap[val]) {
-                        setMatchForm({ ...matchForm, competitionId: val, league: '' });
-                      } else {
-                        // Treat as league name
-                        setMatchForm({ ...matchForm, competitionId: '', league: val });
-                      }
-                    }}
-                  />
-                  <datalist id="competitionList">
-                    {Object.entries(competitionMap).map(([id, name]) => (
-                      <option key={id} value={id}>{name}</option>
-                    ))}
-                  </datalist>
+                    value={matchForm.competitionId}
+                    onChange={(e) => setMatchForm({ ...matchForm, competitionId: e.target.value })}
+                  >
+                    <option value="">Selectează competiția</option>
+                    {competitions
+                      .filter(c => c.active)
+                      .map(c => (
+                        <option key={c.id} value={c.id}>
+                          {c.name}
+                        </option>
+                      ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="text-xs text-neon-green mt-1 hover:underline"
+                    onClick={() => { setShowCreateCompetition(true); setCompetitionError(''); setNewCompetition({ name: '' }); }}
+                  >
+                    +
+                  </button>
+                  {showCreateCompetition && (
+                    <div className="space-y-2 border border-bet-600 rounded-lg p-3 mt-2">
+                      <p className="text-xs text-gray-400">Nume competiție</p>
+                      {competitionError && <p className="text-neon-red text-sm">{competitionError}</p>}
+                      <input
+                        className="input-bet"
+                        placeholder="Nume competiție"
+                        value={newCompetition.name}
+                        onChange={(e) => setNewCompetition({ ...newCompetition, name: e.target.value })}
+                      />
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={handleCreateCompetition}
+                          disabled={competitionLoading}
+                          className="btn-neon-solid text-sm"
+                        >
+                          {competitionLoading ? 'Se salvează...' : 'Salvează'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowCreateCompetition(false);
+                            setNewCompetition({ name: '' });
+                            setCompetitionError('');
+                          }}
+                          className="btn-neon text-sm"
+                        >
+                          Anulează
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
               <div>
@@ -505,7 +563,7 @@ export default function Admin() {
                 />
                 <input
                   className="input-bet"
-                  placeholder="Logo URL (opțional)"
+                  placeholder="Logo URL (opcional)"
                   value={newTeam.logoUrl}
                   onChange={(e) => setNewTeam({ ...newTeam, logoUrl: e.target.value })}
                 />
@@ -636,8 +694,6 @@ export default function Admin() {
           </div>
         </div>
       )}
-
-      
     </div>
   );
 }
