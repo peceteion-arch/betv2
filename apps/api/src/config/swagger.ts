@@ -61,8 +61,8 @@ const options: swaggerJsdoc.Options = {
               properties: {
                 id: { type: 'string' },
                 name: { type: 'string' },
-                emoji: { type: 'string', nullable: true },
                 logoUrl: { type: 'string', nullable: true },
+                active: { type: 'boolean' },
               },
             },
           },

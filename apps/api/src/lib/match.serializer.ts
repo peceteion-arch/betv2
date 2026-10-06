@@ -26,8 +26,8 @@ export interface SerializedMatch {
   competition: {
     id: string;
     name: string;
-    emoji: string | null;
     logoUrl: string | null;
+    active: boolean;
   } | null;
 }
 
@@ -57,8 +57,8 @@ export const serializeMatch = (match: Prisma.MatchGetPayload<{
     competition: match.competition ? {
       id: match.competition.id,
       name: match.competition.name,
-      emoji: match.competition.emoji,
       logoUrl: match.competition.logoUrl,
+      active: match.competition.active,
     } : null,
   };
 };

@@ -25,4 +25,32 @@ router.post('/', authenticate, requireAdmin, async (req: AuthRequest, res) => {
   }
 });
 
+router.patch('/:id', authenticate, requireAdmin, async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    const competition = await competitionService.update(id, req.body);
+    res.json(competition);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Erro interno';
+    res.status(400).json({ error: message });
+  }
+});
+
+router.patch('/:id/status', authenticate, requireAdmin, async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    const { active } = req.body;
+
+    if (typeof active !== 'boolean') {
+      return res.status(400).json({ error: 'Active must be a boolean' });
+    }
+
+    const competition = await competitionService.updateStatus(id, active);
+    res.json(competition);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Erro interno';
+    res.status(400).json({ error: message });
+  }
+});
+
 export default router;
