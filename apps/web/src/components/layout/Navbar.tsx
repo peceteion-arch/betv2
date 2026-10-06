@@ -123,7 +123,6 @@ export default function Navbar({ isMobile }: NavbarProps) {
                       onClick={() => setShowMenu(false)}
                       className="flex items-center gap-3 px-4 py-3 text-sm text-gray-300 hover:bg-bet-600 hover:text-white transition-colors"
                     >
-                      <span>🏆</span>
                       Competiții
                     </Link>
                   </>

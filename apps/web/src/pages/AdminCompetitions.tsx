@@ -78,15 +78,12 @@ export default function AdminCompetitions() {
 
   const getLogoUrl = (url: string): string => {
     if (url.startsWith('http')) return url;
-    // Helper for dev environment
-    return `${window.location.protocol}//${window.location.hostname}:3001${url}`;
+    if (import.meta.env.DEV) {
+      return `${window.location.protocol}//${window.location.hostname}:3001${url}`;
+    }
+    return url;
   };
 
-  const getLogoSrc = (url?: string) => {
-    if (!url) return '';
-    const u = getLogoUrl(url);
-    return u || '';
-  };
 
   return (
     <div className="max-w-4xl mx-auto p-6 text-white">
