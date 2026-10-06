@@ -4,6 +4,7 @@ import { authenticate, requireAdmin } from '../middleware/auth';
 import { AuthRequest } from '../middleware/auth';
 import { uploadCompetitionLogo } from '../lib/upload';
 import { prisma } from '../lib/prisma';
+import { unlink } from 'fs/promises';
 
 const router = Router();
 
@@ -87,6 +88,16 @@ router.post('/:id/logo', authenticate, requireAdmin, checkCompetitionExists, (re
     
     res.json(competition);
   } catch (error: unknown) {
+    // Cleanup: delete uploaded file if DB update failed
+    if (req.file && req.file.path) {
+      try {
+        await unlink(req.file.path);
+        console.log(`Cleaned up uploaded file: ${req.file.path}`);
+      } catch (unlinkError) {
+        console.error(`Failed to cleanup uploaded file ${req.file.path}:`, unlinkError);
+        // Do not mask the original error
+      }
+    }
     const message = error instanceof Error ? error.message : 'Erro interno';
     res.status(500).json({ error: message });
   }
