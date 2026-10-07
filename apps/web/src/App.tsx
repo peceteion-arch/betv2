@@ -16,6 +16,7 @@ import Admin from './pages/Admin';
 import AdminCompetitions from './pages/AdminCompetitions';
 import AdminCompetitionDetail from './pages/AdminCompetitionDetail';
 import AdminStageDetail from './pages/AdminStageDetail';
+import AdminMatchDetail from './pages/AdminMatchDetail';
 import ChangePassword from './pages/ChangePassword';
 import Install from './pages/Install';
 
@@ -53,6 +54,7 @@ export default function App() {
         <Route path="admin/competitii" element={<AdminRoute><AdminCompetitions /></AdminRoute>} />
         <Route path="admin/competitii/:competitionId" element={<AdminRoute><AdminCompetitionDetail /></AdminRoute>} />
         <Route path="admin/competitii/:competitionId/etape/:matchday" element={<AdminRoute><AdminStageDetail /></AdminRoute>} />
+        <Route path="admin/meciuri/:id" element={<AdminRoute><AdminMatchDetail /></AdminRoute>} />
         <Route path="change-password" element={<ChangePassword />} />
         <Route path="install" element={<Install />} />
       </Route>

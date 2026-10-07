@@ -129,7 +129,7 @@ export default function AdminStageDetail() {
             </div>
 
             <div className="flex items-center gap-4">
-              <Link to={`/matches/${m.id}`} className="flex-1 text-right text-neon-green text-sm hover:underline">
+              <Link to={`/admin/meciuri/${m.id}`} className="flex-1 text-right text-neon-green text-sm hover:underline">
                 {m.homeTeam.name}
               </Link>
               <div className="min-w-[4rem] text-center">
@@ -139,7 +139,7 @@ export default function AdminStageDetail() {
                   <span className="text-gray-500">vs</span>
                 )}
               </div>
-              <Link to={`/matches/${m.id}`} className="flex-1 text-left text-neon-green text-sm hover:underline">
+              <Link to={`/admin/meciuri/${m.id}`} className="flex-1 text-left text-neon-green text-sm hover:underline">
                 {m.awayTeam.name}
               </Link>
             </div>
