@@ -103,7 +103,7 @@ router.post('/:id/logo', authenticate, requireAdmin, checkCompetitionExists, (re
   }
 });
 
-router.get('/:id', authenticate, async (req: AuthRequest, res) => {
+router.get('/:id', authenticate, requireAdmin, async (req: AuthRequest, res) => {
   try {
     const { id } = req.params;
     const competition = await competitionService.getById(id);
@@ -115,7 +115,7 @@ router.get('/:id', authenticate, async (req: AuthRequest, res) => {
   }
 });
 
-router.get('/:id/matches', authenticate, async (req: AuthRequest, res) => {
+router.get('/:id/matches', authenticate, requireAdmin, async (req: AuthRequest, res) => {
   try {
     const { id } = req.params;
     const matches = await prisma.match.findMany({

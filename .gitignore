@@ -17,3 +17,5 @@ server.log
 server.pid
 
 *.sql
+node_moduless/
+.vite/
