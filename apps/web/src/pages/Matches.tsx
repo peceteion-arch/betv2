@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../lib/api';
 import { useBetSlip } from '../store/betSlip';
+import { useLiveOdds } from '../store/liveOdds';
 import BetSlip from '../components/BetSlip';
 
 interface MatchOdds {
@@ -43,6 +44,46 @@ export default function Matches() {
       .catch(() => setError('Erro ao carregar jogos'))
       .finally(() => setLoading(false));
   }, [filter, retry]);
+
+  // Cote live: useOddsStream (din Layout) umple store-ul liveOdds la fiecare
+  // modificare a adminului. Lista își ținea cotele doar în `matches`
+  // (încărcat o singură dată), deci nu vedea schimbările până la refresh.
+  const liveOdds = useLiveOdds((s) => s.liveOdds);
+  useEffect(() => {
+    if (liveOdds.size === 0) return;
+    setMatches((prev) => {
+      let changed = false;
+      const next = prev.map((m) => {
+        if (!m.odds) return m;
+        let mChanged = false;
+        const odds = m.odds.map((o) => {
+          const live = liveOdds.get(`${m.id}|${o.market}|${o.selection}`);
+          if (live && (live.value !== Number(o.value) || live.enabled !== o.enabled)) {
+            mChanged = true;
+            return { ...o, value: live.value, enabled: live.enabled };
+          }
+          return o;
+        });
+        if (!mChanged) return m;
+        changed = true;
+        return { ...m, odds };
+      });
+      return changed ? next : prev;
+    });
+  }, [liveOdds]);
+
+  // Plasă de siguranță: dacă stream-ul SSE pierde un eveniment, lista se
+  // reîncarcă periodic (fără spinner) cât timp tab-ul e activ.
+  useEffect(() => {
+    const endpoint = filter === 'live' ? '/matches/live' : '/matches';
+    const timer = setInterval(() => {
+      if (document.hidden) return;
+      api.get(endpoint)
+        .then((r) => setMatches(Array.isArray(r.data) ? r.data : r.data.items || []))
+        .catch(() => {});
+    }, 30000);
+    return () => clearInterval(timer);
+  }, [filter]);
 
   const handleOddsClick = (match: MatchItem, market: string, selection: string, odds: number) => {
     const exists = selections.find((s) => s.matchId === match.id && s.market === market && s.selection === selection);
