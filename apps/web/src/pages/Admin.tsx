@@ -42,6 +42,12 @@ interface AdminMatch {
   homeScore: number | null;
   awayScore: number | null;
   odds: any[];
+  // Fields needed by the admin edit form
+  homeTeamId?: string;
+  awayTeamId?: string;
+  competitionId?: string | null;
+  matchday?: number;
+  betSelectionCount?: number;
 }
 
 export default function Admin() {
@@ -74,6 +80,18 @@ export default function Admin() {
   const [newCompetition, setNewCompetition] = useState({ name: '' });
   const [competitionError, setCompetitionError] = useState('');
   const [competitionLoading, setCompetitionLoading] = useState(false);
+  // Edit-match inline form state (Admin → Meciuri). Kept per-match so the
+  // current identity fields can be pre-filled and the "with-bets" freeze rule
+  // applied by the frontend (the backend still re-enforces it).
+  const [editMatchId, setEditMatchId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<{
+    homeTeamId: string; awayTeamId: string; competitionId: string;
+    matchday: string; matchDate: string;
+  }>({ homeTeamId: '', awayTeamId: '', competitionId: '', matchday: '1', matchDate: '' });
+  const [editMatchStatus, setEditMatchStatus] = useState<string>('');
+  const [editHasBets, setEditHasBets] = useState(false);
+  const [editError, setEditError] = useState('');
+  const [editLoading, setEditLoading] = useState(false);
 
   const loadTeams = async () => {
     const r = await api.get('/teams');
@@ -287,6 +305,68 @@ export default function Admin() {
       setMatches((prev) => prev.map((m) => (m.id === matchId ? r.data : m)));
     } catch (err: any) {
       setMatchError(err.response?.data?.error || 'Erro ao anular marcação VOID');
+    }
+  };
+
+  // ---- Admin match editing (Admin → Meciuri) --------------------------------
+
+  // Pre-fill the inline edit form from a row. The datetime-local value is
+  // interpreted as Europe/Bucharest to match how createManual() stores it, so
+  // we convert the stored UTC instant back into the tz-local wall clock.
+  const openEditMatch = (match: AdminMatch) => {
+    const d = new Date(match.matchDate);
+    const local = new Date(d.toLocaleString('en-US', { timeZone: 'Europe/Bucharest' }));
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const dateStr = `${local.getFullYear()}-${pad(local.getMonth() + 1)}-${pad(local.getDate())}`;
+    const timeStr = `${pad(local.getHours())}:${pad(local.getMinutes())}`;
+    setEditMatchId(match.id);
+    setEditMatchStatus(match.status);
+    setEditHasBets((match.betSelectionCount ?? 0) > 0);
+    setEditForm({
+      homeTeamId: match.homeTeamId ?? '',
+      awayTeamId: match.awayTeamId ?? '',
+      competitionId: match.competitionId ?? '',
+      matchday: String(match.matchday ?? 1),
+      matchDate: `${dateStr}T${timeStr}`,
+    });
+    setEditError('');
+  };
+
+  const closeEditMatch = () => {
+    setEditMatchId(null);
+    setEditError('');
+  };
+
+  // The match can only be edited while SCHEDULED. With existing bets the
+  // identity fields (teams / competition / matchday) are frozen by the backend;
+  // we mirror that here so the disabled fields stay honest.
+  const editAllowed = editMatchStatus === 'SCHEDULED';
+  const editIdentityLocked = editAllowed && editHasBets;
+
+  const handleSaveEditMatch = async () => {
+    if (!editMatchId) return;
+    setEditError('');
+    const matchdayNum = Number(editForm.matchday);
+    if (isNaN(matchdayNum) || matchdayNum < 1) {
+      setEditError('Etapa trebuie să fie un număr întreg ≥ 1');
+      return;
+    }
+    setEditLoading(true);
+    try {
+      const r = await api.patch(`/matches/${editMatchId}`, {
+        homeTeamId: editForm.homeTeamId,
+        awayTeamId: editForm.awayTeamId,
+        competitionId: editForm.competitionId || undefined,
+        matchday: matchdayNum,
+        matchDate: editForm.matchDate,
+      });
+      // Refresh the list from the API response so status, teams and date stay in sync.
+      setMatches((prev) => prev.map((m) => (m.id === editMatchId ? r.data : m)));
+      closeEditMatch();
+    } catch (err: any) {
+      setEditError(err.response?.data?.error || 'Eroare la editarea meciului');
+    } finally {
+      setEditLoading(false);
     }
   };
 
@@ -591,6 +671,131 @@ export default function Admin() {
             </div>
           </div>
 
+          {editMatchId && (
+            <div className="card-bet p-5 space-y-3 animate-slide-up">
+              <h3 className="font-bold text-sm">Editează Jogo</h3>
+              {editError && <p className="text-neon-red text-sm">{editError}</p>}
+              {!editAllowed && (
+                <p className="text-neon-yellow text-sm">
+                  Meciul poate fi editat doar cât time este programat.
+                </p>
+              )}
+              {editIdentityLocked && (
+                <p className="text-xs text-gray-400">
+                  Meciul are deja pariuri: pot fi modificate doar data și ora.
+                </p>
+              )}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[10px] uppercase text-gray-500 mb-1">Echipa gazdă</label>
+                  <select
+                    className="input-bet"
+                    value={editForm.homeTeamId}
+                    disabled={!editAllowed || editIdentityLocked}
+                    onChange={(e) => setEditForm({ ...editForm, homeTeamId: e.target.value })}
+                  >
+                    <option value="">Selectează echipa gazdă</option>
+                    {Object.entries(teamMap).map(([id, name]) => (
+                      <option key={id} value={id}>{name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] uppercase text-gray-500 mb-1">Echipa oaspete</label>
+                  <select
+                    className="input-bet"
+                    value={editForm.awayTeamId}
+                    disabled={!editAllowed || editIdentityLocked}
+                    onChange={(e) => setEditForm({ ...editForm, awayTeamId: e.target.value })}
+                  >
+                    <option value="">Selectează echipa oaspete</option>
+                    {Object.entries(teamMap).map(([id, name]) => (
+                      <option key={id} value={id}>{name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] uppercase text-gray-500 mb-1">Competiție</label>
+                  <select
+                    className="input-bet"
+                    value={editForm.competitionId}
+                    disabled={!editAllowed || editIdentityLocked}
+                    onChange={(e) => setEditForm({ ...editForm, competitionId: e.target.value })}
+                  >
+                    <option value="">Selectează competiția</option>
+                    {(() => {
+                      // Show active competitions plus the match's current one (even if inactive)
+                      const current = editForm.competitionId;
+                      const opts = [...competitions];
+                      if (current && !opts.some((c) => c.id === current)) {
+                        const found = matches.find((m) => m.id === editMatchId);
+                        opts.push({
+                          id: current,
+                          name: found ? (found as any).competition?.name || current : current,
+                          active: false,
+                        } as any);
+                      }
+                      return opts
+                        .filter((c: any) => c.active || c.id === current)
+                        .map((c: any) => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ));
+                    })()}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] uppercase text-gray-500 mb-1">Etapa</label>
+                  <input
+                    className="input-bet"
+                    type="number"
+                    min="1"
+                    value={editForm.matchday}
+                    disabled={!editAllowed || editIdentityLocked}
+                    onChange={(e) => setEditForm({ ...editForm, matchday: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] uppercase text-gray-500 mb-1">Data</label>
+                  <input
+                    className="input-bet"
+                    type="date"
+                    value={editForm.matchDate ? editForm.matchDate.slice(0, 10) : ''}
+                    disabled={!editAllowed}
+                    onChange={(e) => setEditForm({ ...editForm, matchDate: `${e.target.value}T${editForm.matchDate ? editForm.matchDate.slice(11) : '00:00'}` })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] uppercase text-gray-500 mb-1">Ora</label>
+                  <input
+                    className="input-bet"
+                    type="time"
+                    value={editForm.matchDate ? editForm.matchDate.slice(11) : ''}
+                    disabled={!editAllowed}
+                    onChange={(e) => setEditForm({ ...editForm, matchDate: `${editForm.matchDate ? editForm.matchDate.slice(0, 10) : ''}T${e.target.value}` })}
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleSaveEditMatch}
+                  disabled={editLoading || !editAllowed}
+                  className="btn-neon-solid text-sm"
+                >
+                  {editLoading ? 'Se salvează...' : 'Salvează'}
+                </button>
+                <button
+                  type="button"
+                  onClick={closeEditMatch}
+                  disabled={editLoading}
+                  className="btn-neon text-sm"
+                >
+                  Anulează
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="card-bet overflow-hidden">
             <table className="w-full">
               <thead>
@@ -658,7 +863,15 @@ export default function Admin() {
                       )}
                     </td>
                     <td className="p-3">
-                      <div className="flex gap-2 justify-end">
+                      <div className="flex gap-2 justify-end items-center">
+                        <button
+                          onClick={() => openEditMatch(match)}
+                          disabled={match.status !== 'SCHEDULED'}
+                          className="text-[10px] text-neon-yellow hover:underline disabled:text-gray-600 disabled:no-underline disabled:cursor-not-allowed"
+                          title={match.status === 'SCHEDULED' ? 'Editează meciul' : 'Meciul poate fi editat doar cât timp este programat.'}
+                        >
+                          Editează
+                        </button>
                         {match.status === 'VOID' ? (
                           <>
                             <span className="text-[10px] text-neon-blue self-center">VOID</span>

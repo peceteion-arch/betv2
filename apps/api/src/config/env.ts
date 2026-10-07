@@ -80,3 +80,17 @@ export const updateScoreSchema = z.object({
   awayScore: z.number().int().min(0),
   status: z.enum(SCOREABLE_MATCH_STATUSES).optional().default('FINISHED'),
 });
+
+export const updateMatchSchema = z.object({
+  homeTeamId: z.string(),
+  awayTeamId: z.string(),
+  competitionId: z.preprocess(
+    (val) => (typeof val === 'string' && val.trim() === '' ? undefined : val),
+    z.string().optional()
+  ),
+  matchday: z.number().int().min(1),
+  matchDate: matchDateSchema,
+}).refine((data) => data.homeTeamId !== data.awayTeamId, {
+  message: 'Echipa gazdă și echipa oaspete trebuie să fie diferite',
+  path: ['homeTeamId'],
+});

@@ -3,7 +3,7 @@ import { matchService } from '../services/match.service';
 import { authenticate, requireAdmin } from '../middleware/auth';
 import { AuthRequest } from '../middleware/auth';
 import { validate } from '../middleware/validation';
-import { createManualMatchSchema, updateScoreSchema, updateOddsSchema } from '../config/env';
+import { createManualMatchSchema, updateScoreSchema, updateOddsSchema, updateMatchSchema } from '../config/env';
 
 const router = Router();
 
@@ -126,6 +126,26 @@ router.delete('/:id', authenticate, requireAdmin, async (req: AuthRequest, res) 
     res.status(400).json({ error: message });
   }
 });
+
+// PATCH /:id — admin edits the basic data of a scheduled match
+// (home/away team, competition, matchday, matchDate). Registering this before
+// GET /:id is safe: GET /:id uses a different method, so Express only matches
+// the literal segment for PATCH here.
+router.patch(
+  '/:id',
+  authenticate,
+  requireAdmin,
+  validate(updateMatchSchema),
+  async (req: AuthRequest, res) => {
+    try {
+      const match = await matchService.updateMatch(req.params.id, req.body);
+      res.json(match);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Erro ao actualiza meciul';
+      res.status(400).json({ error: message });
+    }
+  }
+);
 
 router.get('/:id', authenticate, async (req: AuthRequest, res) => {
   try {

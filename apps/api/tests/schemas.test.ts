@@ -125,6 +125,78 @@ describe('Zod schemas', () => {
     // through the score route would skip the checks it performs.
     expect(updateScoreSchema.safeParse({ homeScore: 0, awayScore: 0, status: 'VOID' }).success).toBe(false);
   });
+
+  // updateMatch — the admin "edit match" payload. It mirrors
+  // createManualMatchSchema for the identity/date fields and adds the
+  // same home/away distinctness constraint and the datetime-local date form.
+  it('updateMatchSchema accepts a valid edit payload', async () => {
+    const { updateMatchSchema } = await import('../src/config/env');
+    const result = updateMatchSchema.safeParse({
+      homeTeamId: 't1',
+      awayTeamId: 't2',
+      competitionId: 'c1',
+      matchday: 3,
+      matchDate: '2026-10-01T20:00',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.competitionId).toBe('c1');
+  });
+
+  it('updateMatchSchema accepts an edit without a competition', async () => {
+    const { updateMatchSchema } = await import('../src/config/env');
+    const result = updateMatchSchema.safeParse({
+      homeTeamId: 't1',
+      awayTeamId: 't2',
+      matchday: 1,
+      matchDate: '2026-10-01T20:00',
+    });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.competitionId).toBeUndefined();
+  });
+
+  it('updateMatchSchema rejects home === away', async () => {
+    const { updateMatchSchema } = await import('../src/config/env');
+    const result = updateMatchSchema.safeParse({
+      homeTeamId: 't1',
+      awayTeamId: 't1',
+      matchday: 1,
+      matchDate: '2026-10-01T20:00',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('updateMatchSchema rejects matchday < 1', async () => {
+    const { updateMatchSchema } = await import('../src/config/env');
+    const result = updateMatchSchema.safeParse({
+      homeTeamId: 't1',
+      awayTeamId: 't2',
+      matchday: 0,
+      matchDate: '2026-10-01T20:00',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('updateMatchSchema rejects a fractional matchday', async () => {
+    const { updateMatchSchema } = await import('../src/config/env');
+    const result = updateMatchSchema.safeParse({
+      homeTeamId: 't1',
+      awayTeamId: 't2',
+      matchday: 1.5,
+      matchDate: '2026-10-01T20:00',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('updateMatchSchema rejects an unparseable date', async () => {
+    const { updateMatchSchema } = await import('../src/config/env');
+    const result = updateMatchSchema.safeParse({
+      homeTeamId: 't1',
+      awayTeamId: 't2',
+      matchday: 1,
+      matchDate: 'nao-e-uma-data',
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe('SCOREABLE_MATCH_STATUSES', () => {

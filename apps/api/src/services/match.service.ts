@@ -112,11 +112,24 @@ export const matchService = {
   },
 
   // Admin panel listing: every match regardless of status, no pagination.
+  // We also surface a `betSelectionCount` per match so the admin edit UI can
+  // decide which fields are frozen (see updateMatch).
   async listAll(isAdmin: boolean = false) {
     const matches = await prisma.match.findMany({
       include: { odds: true, homeTeam: true, awayTeam: true, competition: true },
       orderBy: { matchDate: 'desc' },
     });
+
+    const matchIds = matches.map((m) => m.id);
+    const counts =
+      matchIds.length === 0
+        ? []
+        : await prisma.betSelection.groupBy({
+            by: ['matchId'],
+            where: { matchId: { in: matchIds } },
+            _count: { _all: true },
+          });
+    const countMap = new Map(counts.map((c) => [c.matchId, c._count._all ?? 0]));
 
     return matches.map((m) => {
       let odds = mapOdds(m.odds);
@@ -126,6 +139,7 @@ export const matchService = {
       return {
         ...serializeMatch(m),
         odds,
+        betSelectionCount: countMap.get(m.id) ?? 0,
       };
     }).filter(m => isAdmin || m.odds.length > 0);
   },
@@ -472,6 +486,118 @@ export const matchService = {
       }
       return results;
     });
+  },
+
+  // Admin edits the basic data of a SCHEDULED match from the Admin → Meciuri
+  // table: home/away team, competition, matchday and matchDate.
+  //
+  // Rules enforced here (the frontend is NOT a security boundary):
+  //  - status must be SCHEDULED, otherwise refuse.
+  //  - when the match already has BetSelection rows, only matchDate may
+  //    change; homeTeamId / awayTeamId / competitionId / matchday are frozen.
+  //  - externalId and the legacy `league` column are never touched.
+  //  - existing odds are left alone.
+  async updateMatch(
+    id: string,
+    data: {
+      homeTeamId: string;
+      awayTeamId: string;
+      competitionId?: string;
+      matchday: number;
+      matchDate: string;
+    }
+  ) {
+    const match = await prisma.match.findUnique({
+      where: { id },
+      select: {
+        status: true,
+        homeTeamId: true,
+        awayTeamId: true,
+        competitionId: true,
+        matchday: true,
+        externalId: true,
+        league: true,
+        matchDate: true,
+      },
+    });
+    if (!match) throw new Error('Jogo não encontrado');
+
+    // Rule 1: only SCHEDULED matches can be edited. For VOID, the operator
+    // must explicitly UNVOID from the per-match page first; we never flip the
+    // status from this endpoint.
+    if (match.status !== 'SCHEDULED') {
+      throw new Error('Meciul poate fi editat doar cât time este programat.');
+    }
+
+    // When the match already has bets, identity fields are frozen.
+    const betSelectionCount = await prisma.betSelection.count({
+      where: { matchId: id },
+    });
+    const hasBets = betSelectionCount > 0;
+
+    // Validate: teams exist (the Zod schema already enforces the home ≠ away
+    // check, but service-level validation must not rely on it).
+    const [homeTeam, awayTeam] = await prisma.$transaction([
+      prisma.team.findUnique({ where: { id: data.homeTeamId }, select: { id: true } }),
+      prisma.team.findUnique({ where: { id: data.awayTeamId }, select: { id: true } }),
+    ]);
+    let competition: { id: string } | null = null;
+    if (data.competitionId) {
+      competition = await prisma.competition.findUnique({
+        where: { id: data.competitionId },
+        select: { id: true },
+      });
+    }
+    if (!homeTeam) throw new Error(`Echipa gazdă nu a fost găsită: ${data.homeTeamId}`);
+    if (!awayTeam) throw new Error(`Echipa oaspete nu a fost găsită: ${data.awayTeamId}`);
+    if (data.competitionId && !competition) {
+      throw new Error(`Competiția nu a fost găsită: ${data.competitionId}`);
+    }
+    if (data.matchday < 1) {
+      throw new Error('Matchday must be at least 1');
+    }
+
+    // Same Europe/Bucharest interpretation as createManual(): the datetime-local
+    // value carries no timezone; we treat it as Bucharest and store UTC.
+    const { fromZonedTime } = await import('date-fns-tz');
+    const utcMatchDate = fromZonedTime(data.matchDate, 'Europe/Bucharest');
+
+    const update: Prisma.MatchUncheckedUpdateInput = {
+      matchDate: utcMatchDate,
+      matchday: data.matchday,
+      homeTeamId: data.homeTeamId,
+      awayTeamId: data.awayTeamId,
+      competitionId: data.competitionId ?? null,
+    };
+
+    if (hasBets) {
+      // When bets exist, we only permit changing matchDate. Detect any attempt
+      // to move the identity fields and reject with a clear message.
+      const changed: string[] = [];
+      if (data.homeTeamId !== match.homeTeamId) changed.push('homeTeamId');
+      if (data.awayTeamId !== match.awayTeamId) changed.push('awayTeamId');
+      if ((data.competitionId ?? null) !== (match.competitionId ?? null)) changed.push('competitionId');
+      if (data.matchday !== match.matchday) changed.push('matchday');
+      if (changed.length > 0) {
+        throw new Error(
+          `Meciul are deja pariuri și pot fi modificate doar data și ora (câmpurile ${changed.join(', ')} sunt blocate).`
+        );
+      }
+      // Freeze identity fields; only matchDate may actually differ.
+      delete update.homeTeamId;
+      delete update.awayTeamId;
+      delete update.competitionId;
+      delete update.matchday;
+    }
+
+    await prisma.match.update({ where: { id }, data: update });
+
+    const updated = await prisma.match.findUnique({
+      where: { id },
+      include: { odds: true, homeTeam: true, awayTeam: true, competition: true },
+    });
+    if (!updated) throw new Error('Jogo não encontrado após atualização');
+    return { ...serializeMatch(updated), odds: mapOdds(updated.odds) };
   },
 
   async getOddsHistory(matchId: string) {
