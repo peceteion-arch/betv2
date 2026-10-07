@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../lib/api';
 import { useBetSlip } from '../store/betSlip';
+import { useLiveOdds } from '../store/liveOdds';
 import { useAuth } from '../lib/auth';
 import BetSlip from '../components/BetSlip';
 
@@ -76,6 +77,38 @@ export default function MatchDetail() {
     }
   }, [id, isAdmin]);
 
+  // Cote live: useOddsStream (montat în Layout) umple store-ul liveOdds la
+  // fiecare modificare făcută de admin. Pagina își ținea cotele doar în
+  // `match` (încărcat o singură dată), deci nu vedea niciodată schimbările.
+  const liveOdds = useLiveOdds((s) => s.liveOdds);
+  useEffect(() => {
+    if (liveOdds.size === 0) return;
+    setMatch((prev) => {
+      if (!prev?.odds) return prev;
+      let changed = false;
+      const odds = prev.odds.map((o) => {
+        const live = liveOdds.get(`${prev.id}|${o.market}|${o.selection}`);
+        if (live && (live.value !== Number(o.value) || live.enabled !== o.enabled)) {
+          changed = true;
+          return { ...o, value: live.value, enabled: live.enabled };
+        }
+        return o;
+      });
+      return changed ? { ...prev, odds } : prev;
+    });
+  }, [liveOdds]);
+
+  // Plasă de siguranță: dacă stream-ul SSE pierde un eveniment (reconectare,
+  // tab în fundal), cotele se reîncarcă periodic din server.
+  useEffect(() => {
+    if (!id || isEditing) return;
+    const timer = setInterval(() => {
+      if (document.hidden) return;
+      api.get(`/matches/${id}`).then((r) => setMatch(r.data)).catch(() => {});
+    }, 30000);
+    return () => clearInterval(timer);
+  }, [id, isEditing]);
+
   const handleOddsClick = (market: string, selection: string, odds: number) => {
     if (isEditing) return;
     if (!canBet) return;
@@ -140,6 +173,8 @@ export default function MatchDetail() {
 const canBet = match && match.status === 'SCHEDULED' && new Date(match.matchDate).getTime() > Date.now();
 
   const groupedOdds = match?.odds?.reduce<Record<string, typeof match.odds>>((acc, odd) => {
+    // Cotele dezactivate sunt ascunse complet pentru utilizatori (nu doar estompate)
+    if (!isAdmin && !odd.enabled) return acc;
     if (!acc[odd.market]) acc[odd.market] = [];
     acc[odd.market].push(odd);
     return acc;

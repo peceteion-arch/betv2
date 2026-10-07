@@ -6,9 +6,16 @@ const router = Router();
 router.get('/stream', (req: Request, res: Response) => {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
-    'Cache-Control': 'no-cache',
+    'Cache-Control': 'no-cache, no-transform',
     'Connection': 'keep-alive',
+    // Opreste buffering-ul in nginx / proxy-uri inverse, altfel evenimentele
+    // ajung la browser doar cand se umple bufferul (sau deloc).
+    'X-Accel-Buffering': 'no',
   });
+  res.flushHeaders();
+
+  // Primul chunk deschide stream-ul imediat si fixeaza intervalul de reconectare
+  res.write('retry: 3000\n\n');
 
   // Heartbeat
   const heartbeat = setInterval(() => {
