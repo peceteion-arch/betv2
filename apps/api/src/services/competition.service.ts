@@ -75,4 +75,10 @@ export const competitionService = {
       },
     });
   },
+
+  async getById(id: string) {
+    return prisma.competition.findUnique({
+      where: { id },
+    });
+  },
 };

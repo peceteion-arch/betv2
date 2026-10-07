@@ -103,4 +103,34 @@ router.post('/:id/logo', authenticate, requireAdmin, checkCompetitionExists, (re
   }
 });
 
+router.get('/:id', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    const competition = await competitionService.getById(id);
+    if (!competition) return res.status(404).json({ error: 'Competiția nu există' });
+    res.json(competition);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Erro interno';
+    res.status(500).json({ error: message });
+  }
+});
+
+router.get('/:id/matches', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const { id } = req.params;
+    const matches = await prisma.match.findMany({
+      where: { competitionId: id },
+      include: {
+        homeTeam: true,
+        awayTeam: true,
+      },
+      orderBy: { matchDate: 'asc' },
+    });
+    res.json(matches);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Erro interno';
+    res.status(500).json({ error: message });
+  }
+});
+
 export default router;

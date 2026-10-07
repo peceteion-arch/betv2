@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../lib/api';
 
 interface Competition {
@@ -155,6 +156,10 @@ export default function AdminCompetitions() {
               >
                 {c.active ? 'Dezactivează' : 'Activează'}
               </button>
+
+              <Link to={`/admin/competitii/${c.id}`} className="btn-neon-solid px-4 text-xs">
+                Vezi etapele
+              </Link>
             </div>
           </div>
         ))}
