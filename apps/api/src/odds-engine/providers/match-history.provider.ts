@@ -1,13 +1,19 @@
+import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { NormalizedMatch } from './match-history.types';
 
-function normalizeMatch(match: any): NormalizedMatch {
+// Shape returned by the provider queries: the Match row plus its two teams.
+type MatchWithTeams = Prisma.MatchGetPayload<{
+  include: { homeTeam: true; awayTeam: true };
+}>;
+
+function normalizeMatch(match: MatchWithTeams): NormalizedMatch {
   return {
     matchId: match.id,
     homeTeamId: match.homeTeamId,
     awayTeamId: match.awayTeamId,
-    homeTeamName: match.homeTeam?.name ?? '',
-    awayTeamName: match.awayTeam?.name ?? '',
+    homeTeamName: match.homeTeam.name,
+    awayTeamName: match.awayTeam.name,
     competitionId: match.competitionId ?? null,
     matchday: match.matchday,
     matchDate: match.matchDate,
@@ -26,7 +32,6 @@ export const matchHistoryProvider = {
       include: {
         homeTeam: true,
         awayTeam: true,
-        competition: true,
       },
       orderBy: { matchDate: 'asc' },
     });
@@ -41,7 +46,6 @@ export const matchHistoryProvider = {
       include: {
         homeTeam: true,
         awayTeam: true,
-        competition: true,
       },
       orderBy: { matchDate: 'desc' },
       take: limit,
@@ -64,7 +68,6 @@ export const matchHistoryProvider = {
       include: {
         homeTeam: true,
         awayTeam: true,
-        competition: true,
       },
       orderBy: { matchDate: 'asc' },
     });
