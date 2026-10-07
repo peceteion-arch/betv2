@@ -29,6 +29,16 @@ interface Competition {
   logoUrl?: string;
 }
 
+const STATUS_LABELS: Record<string, string> = {
+  SCHEDULED: 'Programat',
+  LIVE: 'În desfășurare',
+  FINISHED: 'Terminat',
+  POSTPONED: 'Amânat',
+  VOID: 'Anulat',
+};
+
+const statusLabel = (status: string) => STATUS_LABELS[status] ?? status;
+
 export default function AdminCompetitionDetail() {
   const { competitionId } = useParams();
   const navigate = useNavigate();
@@ -39,8 +49,10 @@ export default function AdminCompetitionDetail() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const compRes = await api.get(`/competitions/${competitionId}`);
-        const matchesRes = await api.get(`/competitions/${competitionId}/matches`);
+        const [compRes, matchesRes] = await Promise.all([
+          api.get(`/competitions/${competitionId}`),
+          api.get(`/competitions/${competitionId}/matches`),
+        ]);
         setCompetition(compRes.data);
         setMatches(matchesRes.data);
       } catch (err) {
@@ -72,7 +84,7 @@ export default function AdminCompetitionDetail() {
     matches.forEach(m => {
       counts[m.status] = (counts[m.status] || 0) + 1;
     });
-    return Object.entries(counts).map(([status, count]) => `${count} ${status}`).join(', ');
+    return Object.entries(counts).map(([status, count]) => `${count} ${statusLabel(status).toLowerCase()}`).join(', ');
   };
 
   if (error) return <div className="max-w-4xl mx-auto p-6 text-neon-red">{error}</div>;
@@ -100,7 +112,7 @@ export default function AdminCompetitionDetail() {
         </div>
       </div>
 
-      <h2 className="text-xl font-bold mb-4">Etapă</h2>
+      <h2 className="text-xl font-bold mb-4">Etape</h2>
 
       <div className="space-y-3">
         {sortedStages.map(matchday => {
@@ -117,7 +129,7 @@ export default function AdminCompetitionDetail() {
               </div>
               <div className="text-right">
                 <div className="text-xs text-gray-500">{getStatusSummary(stageMatches)}</div>
-                <div className="text-sm text-neon-green">Vezi etapele &rarr;</div>
+                <div className="text-sm text-neon-green">Vezi meciurile &rarr;</div>
               </div>
             </button>
           );

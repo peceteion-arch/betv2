@@ -29,6 +29,16 @@ interface Competition {
   logoUrl?: string;
 }
 
+const STATUS_LABELS: Record<string, string> = {
+  SCHEDULED: 'Programat',
+  LIVE: 'În desfășurare',
+  FINISHED: 'Terminat',
+  POSTPONED: 'Amânat',
+  VOID: 'Anulat',
+};
+
+const statusLabel = (status: string) => STATUS_LABELS[status] ?? status;
+
 export default function AdminStageDetail() {
   const { competitionId, matchday } = useParams();
   const [competition, setCompetition] = useState<Competition | null>(null);
@@ -38,8 +48,10 @@ export default function AdminStageDetail() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const compRes = await api.get(`/competitions/${competitionId}`);
-        const matchesRes = await api.get(`/competitions/${competitionId}/matches`);
+        const [compRes, matchesRes] = await Promise.all([
+          api.get(`/competitions/${competitionId}`),
+          api.get(`/competitions/${competitionId}/matches`),
+        ]);
         setCompetition(compRes.data);
         setMatches(matchesRes.data.filter((m: Match) => m.matchday === Number(matchday)));
       } catch (err) {
@@ -111,28 +123,25 @@ export default function AdminStageDetail() {
           <div key={m.id} className="card-bet p-4">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
-                <span className={`text-xs px-2 py-1 rounded ${getStatusClass(m.status)}`}>{m.status}</span>
+                <span className={`text-xs px-2 py-1 rounded ${getStatusClass(m.status)}`}>{statusLabel(m.status)}</span>
               </div>
               <span className="text-xs text-gray-500">{formatDate(m.matchDate)}</span>
             </div>
 
-            <div className="flex items-center justify-between">
-              <div className="flex-1 text-right">
+            <div className="flex items-center gap-4">
+              <Link to={`/matches/${m.id}`} className="flex-1 text-right text-neon-green text-sm hover:underline">
+                {m.homeTeam.name}
+              </Link>
+              <div className="min-w-[4rem] text-center">
                 {m.homeScore !== null && m.awayScore !== null ? (
                   <span className="text-lg font-black text-neon-green">{m.homeScore} - {m.awayScore}</span>
                 ) : (
                   <span className="text-gray-500">vs</span>
                 )}
               </div>
-              <div className="flex items-center gap-4">
-                <Link to={`/matches/${m.id}`} className="text-neon-green text-sm hover:underline">
-                  {m.homeTeam.name}
-                </Link>
-                <span className="text-gray-500">VS</span>
-                <Link to={`/matches/${m.id}`} className="text-neon-green text-sm hover:underline">
-                  {m.awayTeam.name}
-                </Link>
-              </div>
+              <Link to={`/matches/${m.id}`} className="flex-1 text-left text-neon-green text-sm hover:underline">
+                {m.awayTeam.name}
+              </Link>
             </div>
           </div>
         ))}
