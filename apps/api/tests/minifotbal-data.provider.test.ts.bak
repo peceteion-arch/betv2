@@ -1,0 +1,65 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { MinifotbalDataProvider } from '../src/odds-engine/providers/minifotbal-data.provider';
+import Database from 'better-sqlite3';
+
+vi.mock('better-sqlite3');
+
+describe('MinifotbalDataProvider', () => {
+  let provider: MinifotbalDataProvider;
+  let mockDb: any;
+  let mockPrepare: any;
+
+  beforeEach(() => {
+    process.env.MINIFOTBAL_DB_PATH = 'test.db';
+    mockPrepare = {
+      get: vi.fn(),
+      all: vi.fn(),
+    };
+    mockDb = {
+      prepare: vi.fn().mockReturnValue(mockPrepare),
+      close: vi.fn(),
+    };
+    (Database as any).mockImplementation(() => mockDb);
+    provider = new MinifotbalDataProvider();
+  });
+
+  it('getTeamById should return team data', () => {
+    mockPrepare.get.mockReturnValue({ id: 1, nume_echipa: 'Team A', liga_id: 10 });
+    const team = provider.getTeamById(1);
+    expect(team).toEqual({ id: 1, name: 'Team A', leagueId: 10 });
+    expect(mockDb.prepare).toHaveBeenCalledWith(expect.stringContaining('SELECT id, nume_echipa, liga_id FROM echipe WHERE id = ?'));
+  });
+
+  it('getPlayersByTeamId should return players for a team', () => {
+    mockPrepare.all.mockReturnValue([{ id: 10, nume: 'Doe', prenume: 'John', echipa_id: 20, status: 'Active' }]);
+    const players = provider.getPlayersByTeamId(20);
+    expect(players).toHaveLength(1);
+    expect(players[0]).toEqual({ id: 10, firstName: 'John', lastName: 'Doe', teamId: 20, status: 'Active' });
+  });
+
+  it('getPlayerEvents should return events and use event teamId', () => {
+    mockPrepare.all.mockReturnValue([{
+      id: 100,
+      jucator_id: 10,
+      echipa_id: 15, // DIFFERENT from player's current team
+      etapa: 1,
+      tip_eveniment: 'G',
+      note: null
+    }]);
+    
+    const events = provider.getPlayerEvents(10);
+    expect(events[0].teamId).toBe(15);
+  });
+
+  it('getTeamEvents should filter by event teamId', () => {
+    mockPrepare.all.mockReturnValue([]);
+    provider.getTeamEvents(15);
+    expect(mockDb.prepare).toHaveBeenCalledWith(expect.stringContaining('WHERE echipa_id = ?'));
+  });
+
+  it('getPlayerEventsByType should filter by type', () => {
+    mockPrepare.all.mockReturnValue([]);
+    provider.getPlayerEventsByType(10, 'R');
+    expect(mockDb.prepare).toHaveBeenCalledWith(expect.stringContaining('AND tip_eveniment = ?'));
+  });
+});
