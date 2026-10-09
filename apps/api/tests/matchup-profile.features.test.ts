@@ -4,6 +4,8 @@ import * as teamProfileFeatures from '../src/odds-engine/features/team-profile.f
 import * as h2hStatsFeatures from '../src/odds-engine/features/h2h-stats.features';
 import { TeamProfile } from '../src/odds-engine/features/team-profile.types';
 import { H2HStats } from '../src/odds-engine/features/h2h-stats.types';
+import { BasicTeamStats } from '../src/odds-engine/features/team-basic-stats.types';
+import { TeamFormWindowStats } from '../src/odds-engine/features/team-form.types';
 
 vi.mock('../src/odds-engine/features/team-profile.features', () => ({
   getTeamProfile: vi.fn(),
@@ -18,7 +20,7 @@ describe('getMatchupProfile', () => {
     vi.resetAllMocks();
   });
 
-  const createMockBasicStats = (teamId: string) => ({
+  const createMockBasicStats = (teamId: string): BasicTeamStats => ({
     teamId,
     matches: 10,
     wins: 5,
@@ -46,7 +48,7 @@ describe('getMatchupProfile', () => {
     over35Rate: 0.2,
   });
 
-  const createMockFormWindow = () => ({
+  const createMockFormWindow = (): TeamFormWindowStats => ({
     matches: 3, wins: 2, draws: 1, losses: 0, points: 7, pointsPerMatch: 2.33,
     goalsFor: 5, goalsAgainst: 2, goalDifference: 3, goalsForPerMatch: 1.66, goalsAgainstPerMatch: 0.66, goalDifferencePerMatch: 1,
     cleanSheets: 1, cleanSheetRate: 0.33, failedToScore: 0, failedToScoreRate: 0, bttsYes: 1, bttsRate: 0.33,
@@ -57,6 +59,7 @@ describe('getMatchupProfile', () => {
     teamId,
     basicStats: createMockBasicStats(teamId),
     form: {
+      teamId,
       last3: createMockFormWindow(),
       last5: createMockFormWindow(),
       last10: createMockFormWindow(),
@@ -104,6 +107,9 @@ describe('getMatchupProfile', () => {
     expect(result.teamA).toEqual(profileA);
     expect(result.teamB).toEqual(profileB);
     expect(result.h2h).toEqual(h2h);
+    expect(teamProfileFeatures.getTeamProfile).toHaveBeenCalledWith(teamAId);
+    expect(teamProfileFeatures.getTeamProfile).toHaveBeenCalledWith(teamBId);
+    expect(h2hStatsFeatures.getH2HStats).toHaveBeenCalledWith(teamAId, teamBId);
   });
 
   it('should reject identical team IDs before calling other functions', async () => {
@@ -141,8 +147,15 @@ describe('getMatchupProfile', () => {
     const teamAId = 'NewTeamA';
     const teamBId = 'NewTeamB';
 
-    const createZeroStats = (teamId: string) => ({
+    const createZeroStats = (teamId: string): BasicTeamStats => ({
       teamId,
+      matches: 0, wins: 0, draws: 0, losses: 0, points: 0, pointsPerMatch: 0,
+      goalsFor: 0, goalsAgainst: 0, goalDifference: 0, goalsForPerMatch: 0, goalsAgainstPerMatch: 0, goalDifferencePerMatch: 0,
+      cleanSheets: 0, cleanSheetRate: 0, failedToScore: 0, failedToScoreRate: 0, bttsYes: 0, bttsRate: 0,
+      over15: 0, over15Rate: 0, over25: 0, over25Rate: 0, over35: 0, over35Rate: 0,
+    });
+
+    const createZeroFormWindow = (): TeamFormWindowStats => ({
       matches: 0, wins: 0, draws: 0, losses: 0, points: 0, pointsPerMatch: 0,
       goalsFor: 0, goalsAgainst: 0, goalDifference: 0, goalsForPerMatch: 0, goalsAgainstPerMatch: 0, goalDifferencePerMatch: 0,
       cleanSheets: 0, cleanSheetRate: 0, failedToScore: 0, failedToScoreRate: 0, bttsYes: 0, bttsRate: 0,
@@ -153,9 +166,10 @@ describe('getMatchupProfile', () => {
       teamId,
       basicStats: createZeroStats(teamId),
       form: {
-        last3: { ...createZeroStats(teamId), matches: 0 },
-        last5: { ...createZeroStats(teamId), matches: 0 },
-        last10: { ...createZeroStats(teamId), matches: 0 },
+        teamId,
+        last3: createZeroFormWindow(),
+        last5: createZeroFormWindow(),
+        last10: createZeroFormWindow(),
       },
       homeAway: {
         teamId,
