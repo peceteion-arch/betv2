@@ -209,7 +209,7 @@ describe('getBasicTeamStats', () => {
       ]);
 
       // Act
-      const result = await getBasicTeamStats('teamB');
+      const result = await getBasicTeamStats('teamB', new Date('2099-01-01T00:00:00Z'));
 
       // Assert
       expect(result.matches).toBe(1);
@@ -228,7 +228,7 @@ describe('getBasicTeamStats', () => {
       (matchHistoryProvider.getTeamMatches as any).mockResolvedValue([]);
 
       // Act
-      const result = await getBasicTeamStats('teamA');
+      const result = await getBasicTeamStats('teamA', new Date('2099-01-01T00:00:00Z'));
 
       // Assert
       expect(result.matches).toBe(0);
@@ -266,7 +266,7 @@ describe('getBasicTeamStats', () => {
       ]);
 
       // Act
-      const result = await getBasicTeamStats('teamA');
+      const result = await getBasicTeamStats('teamA', new Date('2099-01-01T00:00:00Z'));
 
       // Assert
       expect(result.matches).toBe(1); // Only teamA's match

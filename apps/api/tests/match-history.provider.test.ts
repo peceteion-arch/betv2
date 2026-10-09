@@ -84,7 +84,7 @@ describe('matchHistoryProvider', () => {
     });
 
     it('rejects same team for both args', async () => {
-      await expect(matchHistoryProvider.getHeadToHead('tA', 'tA')).rejects.toThrow('must be different');
+      await expect(matchHistoryProvider.getHeadToHead('tA', 'tA', new Date('2099-01-01T00:00:00Z'))).rejects.toThrow('must be different');
     });
   });
 
