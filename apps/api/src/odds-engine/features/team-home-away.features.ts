@@ -104,15 +104,16 @@ function calculateVenueStats(matches: NormalizedMatch[], teamId: string): BasicT
 /**
  * Computes Home and Away statistics for a given team by partitioning their match history.
  */
-export async function getTeamHomeAwayStats(teamId: string): Promise<TeamHomeAwayStats> {
-  const allMatches = await matchHistoryProvider.getTeamMatches(teamId);
+export async function getTeamHomeAwayStats(teamId: string, asOf: Date): Promise<TeamHomeAwayStats> {
+  const allMatches = await matchHistoryProvider.getTeamMatches(teamId, asOf);
 
   // Filter eligible matches: FINISHED and both scores not null
   const eligibleMatches = allMatches.filter(
     (match) =>
       match.status === 'FINISHED' &&
       match.homeScore !== null &&
-      match.awayScore !== null
+      match.awayScore !== null &&
+      match.matchDate < asOf
   );
 
   const homeMatches = eligibleMatches.filter((m) => m.homeTeamId === teamId);

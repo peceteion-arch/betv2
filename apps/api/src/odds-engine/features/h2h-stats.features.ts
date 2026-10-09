@@ -4,20 +4,22 @@ import { H2HStats } from './h2h-stats.types';
 
 export async function getH2HStats(
   teamAId: string,
-  teamBId: string
+  teamBId: string,
+  asOf: Date
 ): Promise<H2HStats> {
   if (teamAId === teamBId) {
     throw new Error('teamAId and teamBId must be different');
   }
 
-  const allMatches = await matchHistoryProvider.getHeadToHead(teamAId, teamBId);
+  const allMatches = await matchHistoryProvider.getHeadToHead(teamAId, teamBId, asOf);
 
   // Filter eligible matches: FINISHED and both scores not null
   const eligibleMatches = allMatches.filter(
     (match) =>
       match.status === 'FINISHED' &&
       match.homeScore !== null &&
-      match.awayScore !== null
+      match.awayScore !== null &&
+      match.matchDate < asOf
   );
 
   // Initialize counters

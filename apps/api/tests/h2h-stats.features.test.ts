@@ -49,7 +49,7 @@ describe('getH2HStats', () => {
     ]);
 
     // Act
-    const result = await getH2HStats('Ajax', 'Phoenix');
+    const result = await getH2HStats('Ajax', 'Phoenix', new Date('2099-01-01T00:00:00Z'));
 
     // Assert
     expect(result.matches).toBe(2);
@@ -72,7 +72,7 @@ describe('getH2HStats', () => {
     ]);
 
     // Act
-    const result = await getH2HStats('Ajax', 'Phoenix');
+    const result = await getH2HStats('Ajax', 'Phoenix', new Date('2099-01-01T00:00:00Z'));
 
     // Assert
     expect(result.matches).toBe(2);
@@ -91,7 +91,7 @@ describe('getH2HStats', () => {
     ]);
 
     // Act
-    const result = await getH2HStats('Ajax', 'Phoenix');
+    const result = await getH2HStats('Ajax', 'Phoenix', new Date('2099-01-01T00:00:00Z'));
 
     // Assert
     expect(result.matches).toBe(1);
@@ -108,7 +108,7 @@ describe('getH2HStats', () => {
     ]);
 
     // Act
-    const result = await getH2HStats('Ajax', 'Phoenix');
+    const result = await getH2HStats('Ajax', 'Phoenix', new Date('2099-01-01T00:00:00Z'));
 
     // Assert
     expect(result.matches).toBe(1);
@@ -126,7 +126,7 @@ describe('getH2HStats', () => {
     ]);
 
     // Act
-    const result = await getH2HStats('Ajax', 'Phoenix');
+    const result = await getH2HStats('Ajax', 'Phoenix', new Date('2099-01-01T00:00:00Z'));
 
     // Assert
     expect(result.matches).toBe(1);
@@ -145,7 +145,7 @@ describe('getH2HStats', () => {
     ]);
 
     // Act
-    const result = await getH2HStats('Ajax', 'Phoenix');
+    const result = await getH2HStats('Ajax', 'Phoenix', new Date('2099-01-01T00:00:00Z'));
 
     // Assert
     expect(result.teamAGoals).toBe(7); // 3 + 4 + 0
@@ -161,7 +161,7 @@ describe('getH2HStats', () => {
     ]);
 
     // Act
-    const result = await getH2HStats('Ajax', 'Phoenix');
+    const result = await getH2HStats('Ajax', 'Phoenix', new Date('2099-01-01T00:00:00Z'));
 
     // Assert
     expect(result.teamBGoals).toBe(3); // 1 + 2 + 0
@@ -177,7 +177,7 @@ describe('getH2HStats', () => {
     ]);
 
     // Act
-    const result = await getH2HStats('Ajax', 'Phoenix');
+    const result = await getH2HStats('Ajax', 'Phoenix', new Date('2099-01-01T00:00:00Z'));
 
     // Assert
     expect(result.teamAGoalsPerMatch).toBeCloseTo(6 / 3);
@@ -192,7 +192,7 @@ describe('getH2HStats', () => {
     ]);
 
     // Act
-    const result = await getH2HStats('Ajax', 'Phoenix');
+    const result = await getH2HStats('Ajax', 'Phoenix', new Date('2099-01-01T00:00:00Z'));
 
     // Assert
     expect(result.teamBGoalsPerMatch).toBeCloseTo(2 / 2);
@@ -208,7 +208,7 @@ describe('getH2HStats', () => {
     ]);
 
     // Act
-    const result = await getH2HStats('Ajax', 'Phoenix');
+    const result = await getH2HStats('Ajax', 'Phoenix', new Date('2099-01-01T00:00:00Z'));
 
     // Assert
     expect(result.teamAWinRate).toBeCloseTo(2 / 3);
@@ -225,7 +225,7 @@ describe('getH2HStats', () => {
     ]);
 
     // Act
-    const result = await getH2HStats('Ajax', 'Phoenix');
+    const result = await getH2HStats('Ajax', 'Phoenix', new Date('2099-01-01T00:00:00Z'));
 
     // Assert
     expect(result.drawRate).toBeCloseTo(2 / 4);
@@ -241,7 +241,7 @@ describe('getH2HStats', () => {
     ]);
 
     // Act
-    const result = await getH2HStats('Ajax', 'Phoenix');
+    const result = await getH2HStats('Ajax', 'Phoenix', new Date('2099-01-01T00:00:00Z'));
 
     // Assert
     expect(result.teamBWinRate).toBeCloseTo(2 / 3);
@@ -257,7 +257,7 @@ describe('getH2HStats', () => {
     ]);
 
     // Act
-    const result = await getH2HStats('Ajax', 'Phoenix');
+    const result = await getH2HStats('Ajax', 'Phoenix', new Date('2099-01-01T00:00:00Z'));
 
     // Assert
     expect(result.averageTotalGoals).toBeCloseTo(9 / 3);
@@ -276,7 +276,7 @@ describe('getH2HStats', () => {
     ]);
 
     // Act
-    const result = await getH2HStats('Ajax', 'Phoenix');
+    const result = await getH2HStats('Ajax', 'Phoenix', new Date('2099-01-01T00:00:00Z'));
 
     // Assert
     expect(result.matches).toBe(1);
@@ -293,7 +293,7 @@ describe('getH2HStats', () => {
     ]);
 
     // Act
-    const result = await getH2HStats('Ajax', 'Phoenix');
+    const result = await getH2HStats('Ajax', 'Phoenix', new Date('2099-01-01T00:00:00Z'));
 
     // Assert
     expect(result.matches).toBe(1);
@@ -306,7 +306,7 @@ describe('getH2HStats', () => {
     (matchHistoryProvider.getHeadToHead as any).mockResolvedValue([]);
 
     // Act
-    const result = await getH2HStats('Ajax', 'Phoenix');
+    const result = await getH2HStats('Ajax', 'Phoenix', new Date('2099-01-01T00:00:00Z'));
 
     // Assert
     expect(result.teamAId).toBe('Ajax');
@@ -350,7 +350,7 @@ describe('getH2HStats', () => {
     (matchHistoryProvider.getHeadToHead as any).mockResolvedValue([]);
 
     // Act / Assert
-    await expect(getH2HStats('Ajax', 'Ajax')).rejects.toThrow(
+    await expect(getH2HStats('Ajax', 'Ajax', new Date('2099-01-01T00:00:00Z'))).rejects.toThrow(
       'teamAId and teamBId must be different'
     );
     expect(matchHistoryProvider.getHeadToHead).not.toHaveBeenCalled();
@@ -367,7 +367,7 @@ describe('getH2HStats', () => {
     ]);
 
     // Act
-    const result = await getH2HStats('Ajax', 'Phoenix');
+    const result = await getH2HStats('Ajax', 'Phoenix', new Date('2099-01-01T00:00:00Z'));
 
     // Assert
     expect(result.matches).toBe(1);
@@ -386,7 +386,7 @@ describe('getH2HStats', () => {
     ]);
 
     // Act
-    const result = await getH2HStats('Ajax', 'Phoenix');
+    const result = await getH2HStats('Ajax', 'Phoenix', new Date('2099-01-01T00:00:00Z'));
 
     // Assert
     expect(result.matches).toBe(4);
@@ -407,8 +407,8 @@ describe('getH2HStats', () => {
     ]);
 
     // Act
-    const ajaxView = await getH2HStats('Ajax', 'Phoenix');
-    const phoenixView = await getH2HStats('Phoenix', 'Ajax');
+    const ajaxView = await getH2HStats('Ajax', 'Phoenix', new Date('2099-01-01T00:00:00Z'));
+    const phoenixView = await getH2HStats('Phoenix', 'Ajax', new Date('2099-01-01T00:00:00Z'));
 
     // Assert: symmetry relationships
     expect(ajaxView.matches).toBe(phoenixView.matches);

@@ -53,7 +53,7 @@ describe('getTeamHomeAwayStats', () => {
       ]);
 
       // Act
-      const result = await getTeamHomeAwayStats('teamX');
+      const result = await getTeamHomeAwayStats('teamX', new Date('2099-01-01T00:00:00Z'));
 
       // Assert
       expect(result.home.matches).toBe(2); // m1, m3
@@ -73,7 +73,7 @@ describe('getTeamHomeAwayStats', () => {
       ]);
 
       // Act
-      const result = await getTeamHomeAwayStats('teamA');
+      const result = await getTeamHomeAwayStats('teamA', new Date('2099-01-01T00:00:00Z'));
 
       // Assert for HOME
       expect(result.home.matches).toBe(3);
@@ -95,7 +95,7 @@ describe('getTeamHomeAwayStats', () => {
       ]);
 
       // Act
-      const result = await getTeamHomeAwayStats('teamA');
+      const result = await getTeamHomeAwayStats('teamA', new Date('2099-01-01T00:00:00Z'));
 
       // Assert for AWAY
       expect(result.away.matches).toBe(3);
@@ -117,7 +117,7 @@ describe('getTeamHomeAwayStats', () => {
       ]);
 
       // Act
-      const result = await getTeamHomeAwayStats('teamA');
+      const result = await getTeamHomeAwayStats('teamA', new Date('2099-01-01T00:00:00Z'));
 
       // Assert for HOME
       expect(result.home.goalsFor).toBe(5); // 3 + 0 + 2
@@ -137,7 +137,7 @@ describe('getTeamHomeAwayStats', () => {
       ]);
 
       // Act
-      const result = await getTeamHomeAwayStats('teamA');
+      const result = await getTeamHomeAwayStats('teamA', new Date('2099-01-01T00:00:00Z'));
 
       // Assert for AWAY
       expect(result.away.goalsFor).toBe(7); // 3 + 2 + 2
@@ -157,7 +157,7 @@ describe('getTeamHomeAwayStats', () => {
       ]);
 
       // Act
-      const result = await getTeamHomeAwayStats('teamA');
+      const result = await getTeamHomeAwayStats('teamA', new Date('2099-01-01T00:00:00Z'));
 
       // Assert for HOME
       expect(result.home.matches).toBe(3);
@@ -177,7 +177,7 @@ describe('getTeamHomeAwayStats', () => {
       ]);
 
       // Act
-      const result = await getTeamHomeAwayStats('teamA');
+      const result = await getTeamHomeAwayStats('teamA', new Date('2099-01-01T00:00:00Z'));
 
       // Assert for AWAY
       expect(result.away.matches).toBe(3);
@@ -198,7 +198,7 @@ describe('getTeamHomeAwayStats', () => {
       ]);
 
       // Act
-      const result = await getTeamHomeAwayStats('teamA');
+      const result = await getTeamHomeAwayStats('teamA', new Date('2099-01-01T00:00:00Z'));
 
       // Assert for HOME
       expect(result.home.cleanSheets).toBe(2); // m1, m2
@@ -222,7 +222,7 @@ describe('getTeamHomeAwayStats', () => {
       ]);
 
       // Act
-      const result = await getTeamHomeAwayStats('teamA');
+      const result = await getTeamHomeAwayStats('teamA', new Date('2099-01-01T00:00:00Z'));
 
       // Assert for AWAY
       expect(result.away.cleanSheets).toBe(2); // m1, m2
@@ -246,7 +246,7 @@ describe('getTeamHomeAwayStats', () => {
       ]);
 
       // Act
-      const result = await getTeamHomeAwayStats('teamA');
+      const result = await getTeamHomeAwayStats('teamA', new Date('2099-01-01T00:00:00Z'));
 
       // Assert for HOME
       expect(result.home.over15).toBe(3); // Matches m2, m3, m4
@@ -270,7 +270,7 @@ describe('getTeamHomeAwayStats', () => {
       ]);
 
       // Act
-      const result = await getTeamHomeAwayStats('teamA');
+      const result = await getTeamHomeAwayStats('teamA', new Date('2099-01-01T00:00:00Z'));
 
       // Assert for AWAY
       expect(result.away.over15).toBe(3); // Matches m2, m3, m4
@@ -295,7 +295,7 @@ describe('getTeamHomeAwayStats', () => {
       ]);
 
       // Act
-      const result = await getTeamHomeAwayStats('teamA');
+      const result = await getTeamHomeAwayStats('teamA', new Date('2099-01-01T00:00:00Z'));
 
       // Assert
       expect(result.home.matches).toBe(1); // Only m1
@@ -315,7 +315,7 @@ describe('getTeamHomeAwayStats', () => {
       ]);
 
       // Act
-      const result = await getTeamHomeAwayStats('teamA');
+      const result = await getTeamHomeAwayStats('teamA', new Date('2099-01-01T00:00:00Z'));
 
       // Assert for HOME (should be all zeros)
       expect(result.home.matches).toBe(0);
@@ -360,7 +360,7 @@ describe('getTeamHomeAwayStats', () => {
       ]);
 
       // Act
-      const result = await getTeamHomeAwayStats('teamA');
+      const result = await getTeamHomeAwayStats('teamA', new Date('2099-01-01T00:00:00Z'));
 
       // Assert for AWAY (should be all zeros)
       expect(result.away.matches).toBe(0);
@@ -406,7 +406,7 @@ describe('getTeamHomeAwayStats', () => {
       ]);
 
       // Act
-      const result = await getTeamHomeAwayStats('teamA');
+      const result = await getTeamHomeAwayStats('teamA', new Date('2099-01-01T00:00:00Z'));
 
       // Assert
       expect(result.home.matches).toBe(3);
@@ -436,7 +436,7 @@ describe('getTeamHomeAwayStats', () => {
       ]);
 
       // Act
-      const result = await getTeamHomeAwayStats('teamA');
+      const result = await getTeamHomeAwayStats('teamA', new Date('2099-01-01T00:00:00Z'));
 
       // Assert
       expect(result.away.matches).toBe(3);
@@ -467,7 +467,7 @@ describe('getTeamHomeAwayStats', () => {
       ]);
 
       // Act
-      const result = await getTeamHomeAwayStats('teamA');
+      const result = await getTeamHomeAwayStats('teamA', new Date('2099-01-01T00:00:00Z'));
 
       // Assert: only teamA's matches should count
       // m1: teamA is HOME (homeTeamId='teamA'), m3: teamA is HOME (homeTeamId='teamA')
@@ -502,7 +502,7 @@ describe('getTeamHomeAwayStats', () => {
       ]);
 
       // Act
-      const result = await getTeamHomeAwayStats('teamA');
+      const result = await getTeamHomeAwayStats('teamA', new Date('2099-01-01T00:00:00Z'));
 
       // Assert for HOME (3 matches: m1 2-0, m2 1-1, m3 0-1)
       expect(result.home.matches).toBe(3);

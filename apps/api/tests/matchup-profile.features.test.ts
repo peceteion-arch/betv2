@@ -95,27 +95,27 @@ describe('getMatchupProfile', () => {
     const profileB = mockTeamProfile(teamBId);
     const h2h = mockH2HStats(teamAId, teamBId);
 
-    vi.mocked(teamProfileFeatures.getTeamProfile).mockImplementation(async (id) => {
+    vi.mocked(teamProfileFeatures.getTeamProfile).mockImplementation(async (id, _asOf) => {
       if (id === teamAId) return profileA;
       if (id === teamBId) return profileB;
       throw new Error('Unexpected ID');
     });
     vi.mocked(h2hStatsFeatures.getH2HStats).mockResolvedValue(h2h);
 
-    const result = await getMatchupProfile(teamAId, teamBId);
+    const result = await getMatchupProfile(teamAId, teamBId, new Date('2099-01-01T00:00:00Z'));
 
     expect(result.teamA).toEqual(profileA);
     expect(result.teamB).toEqual(profileB);
     expect(result.h2h).toEqual(h2h);
-    expect(teamProfileFeatures.getTeamProfile).toHaveBeenCalledWith(teamAId);
-    expect(teamProfileFeatures.getTeamProfile).toHaveBeenCalledWith(teamBId);
-    expect(h2hStatsFeatures.getH2HStats).toHaveBeenCalledWith(teamAId, teamBId);
+    expect(teamProfileFeatures.getTeamProfile).toHaveBeenCalledWith(teamAId, new Date('2099-01-01T00:00:00Z'));
+    expect(teamProfileFeatures.getTeamProfile).toHaveBeenCalledWith(teamBId, new Date('2099-01-01T00:00:00Z'));
+    expect(h2hStatsFeatures.getH2HStats).toHaveBeenCalledWith(teamAId, teamBId, new Date('2099-01-01T00:00:00Z'));
   });
 
   it('should reject identical team IDs before calling other functions', async () => {
     const teamId = 'SameTeam';
 
-    await expect(getMatchupProfile(teamId, teamId)).rejects.toThrow(
+    await expect(getMatchupProfile(teamId, teamId, new Date())).rejects.toThrow(
       'teamAId and teamBId must be different'
     );
 
@@ -126,21 +126,23 @@ describe('getMatchupProfile', () => {
   it('should propagate errors from getTeamProfile', async () => {
     const teamAId = 'TeamA';
     const teamBId = 'TeamB';
+    const asOf = new Date('2099-01-01T00:00:00Z');
 
     vi.mocked(teamProfileFeatures.getTeamProfile).mockRejectedValue(new Error('Profile failure'));
     vi.mocked(h2hStatsFeatures.getH2HStats).mockResolvedValue(mockH2HStats(teamAId, teamBId));
 
-    await expect(getMatchupProfile(teamAId, teamBId)).rejects.toThrow('Profile failure');
+    await expect(getMatchupProfile(teamAId, teamBId, asOf)).rejects.toThrow('Profile failure');
   });
 
   it('should propagate errors from getH2HStats', async () => {
     const teamAId = 'TeamA';
     const teamBId = 'TeamB';
+    const asOf = new Date('2099-01-01T00:00:00Z');
 
     vi.mocked(teamProfileFeatures.getTeamProfile).mockResolvedValue(mockTeamProfile(teamAId));
     vi.mocked(h2hStatsFeatures.getH2HStats).mockRejectedValue(new Error('H2H failure'));
 
-    await expect(getMatchupProfile(teamAId, teamBId)).rejects.toThrow('H2H failure');
+    await expect(getMatchupProfile(teamAId, teamBId, asOf)).rejects.toThrow('H2H failure');
   });
 
   it('should handle teams with no history correctly', async () => {
@@ -184,10 +186,10 @@ describe('getMatchupProfile', () => {
       teamAWinRate: 0, drawRate: 0, teamBWinRate: 0, averageTotalGoals: 0,
     };
 
-    vi.mocked(teamProfileFeatures.getTeamProfile).mockImplementation(async (id) => zeroProfile(id));
+    vi.mocked(teamProfileFeatures.getTeamProfile).mockImplementation(async (id, _asOf) => zeroProfile(id));
     vi.mocked(h2hStatsFeatures.getH2HStats).mockResolvedValue(zeroH2H);
 
-    const result = await getMatchupProfile(teamAId, teamBId);
+    const result = await getMatchupProfile(teamAId, teamBId, new Date('2099-01-01T00:00:00Z'));
 
     expect(result.teamA.basicStats.matches).toBe(0);
     expect(result.teamB.basicStats.matches).toBe(0);

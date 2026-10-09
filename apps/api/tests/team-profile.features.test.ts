@@ -64,16 +64,16 @@ describe('getTeamProfile', () => {
     vi.mocked(getTeamFormStats).mockResolvedValue(mockFormStats);
     vi.mocked(getTeamHomeAwayStats).mockResolvedValue(mockHomeAwayStats);
 
-    const profile = await getTeamProfile(teamId);
+    const profile = await getTeamProfile(teamId, new Date('2099-01-01T00:00:00Z'));
 
     expect(profile.teamId).toBe(teamId);
     expect(profile.basicStats).toEqual(mockBasicStats);
     expect(profile.form).toEqual(mockFormStats);
     expect(profile.homeAway).toEqual(mockHomeAwayStats);
 
-    expect(getBasicTeamStats).toHaveBeenCalledWith(teamId);
-    expect(getTeamFormStats).toHaveBeenCalledWith(teamId);
-    expect(getTeamHomeAwayStats).toHaveBeenCalledWith(teamId);
+    expect(getBasicTeamStats).toHaveBeenCalledWith(teamId, new Date('2099-01-01T00:00:00Z'));
+    expect(getTeamFormStats).toHaveBeenCalledWith(teamId, new Date('2099-01-01T00:00:00Z'));
+    expect(getTeamHomeAwayStats).toHaveBeenCalledWith(teamId, new Date('2099-01-01T00:00:00Z'));
   });
 
   it('should handle error propagation from one of the statistical functions', async () => {
@@ -82,7 +82,7 @@ describe('getTeamProfile', () => {
     vi.mocked(getTeamFormStats).mockResolvedValue(mockFormStats);
     vi.mocked(getTeamHomeAwayStats).mockResolvedValue(mockHomeAwayStats);
 
-    await expect(getTeamProfile(teamId)).rejects.toThrow('Database error');
+    await expect(getTeamProfile(teamId, new Date('2099-01-01T00:00:00Z'))).rejects.toThrow('Database error');
   });
 
   it('should aggregate statistics correctly for a team with no history', async () => {
@@ -129,7 +129,7 @@ describe('getTeamProfile', () => {
     vi.mocked(getTeamFormStats).mockResolvedValue(zeroFormStats);
     vi.mocked(getTeamHomeAwayStats).mockResolvedValue(zeroHomeAwayStats);
 
-    const profile = await getTeamProfile(teamId);
+    const profile = await getTeamProfile(teamId, new Date('2099-01-01T00:00:00Z'));
 
     expect(profile.basicStats.matches).toBe(0);
     expect(profile.form.last3.matches).toBe(0);

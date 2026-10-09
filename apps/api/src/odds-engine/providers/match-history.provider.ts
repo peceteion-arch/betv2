@@ -24,10 +24,13 @@ function normalizeMatch(match: MatchWithTeams): NormalizedMatch {
 }
 
 export const matchHistoryProvider = {
-  async getTeamMatches(teamId: string): Promise<NormalizedMatch[]> {
+  // Temporal cutoff rule (PASUL 1.5A): only matches BEFORE asOf are eligible.
+  // Comparison is strict: matchDate < asOf. A match exactly at asOf or after is excluded.
+  async getTeamMatches(teamId: string, asOf: Date): Promise<NormalizedMatch[]> {
     const matches = await prisma.match.findMany({
       where: {
         OR: [{ homeTeamId: teamId }, { awayTeamId: teamId }],
+        matchDate: { lt: asOf },
       },
       include: {
         homeTeam: true,
@@ -38,10 +41,11 @@ export const matchHistoryProvider = {
     return matches.map(normalizeMatch);
   },
 
-  async getRecentTeamMatches(teamId: string, limit: number): Promise<NormalizedMatch[]> {
+  async getRecentTeamMatches(teamId: string, limit: number, asOf: Date): Promise<NormalizedMatch[]> {
     const matches = await prisma.match.findMany({
       where: {
         OR: [{ homeTeamId: teamId }, { awayTeamId: teamId }],
+        matchDate: { lt: asOf },
       },
       include: {
         homeTeam: true,
@@ -54,7 +58,7 @@ export const matchHistoryProvider = {
     return matches.reverse().map(normalizeMatch);
   },
 
-  async getHeadToHead(teamAId: string, teamBId: string): Promise<NormalizedMatch[]> {
+  async getHeadToHead(teamAId: string, teamBId: string, asOf: Date): Promise<NormalizedMatch[]> {
     if (teamAId === teamBId) {
       throw new Error('teamAId and teamBId must be different');
     }
@@ -64,6 +68,7 @@ export const matchHistoryProvider = {
           { homeTeamId: teamAId, awayTeamId: teamBId },
           { homeTeamId: teamBId, awayTeamId: teamAId },
         ],
+        matchDate: { lt: asOf },
       },
       include: {
         homeTeam: true,

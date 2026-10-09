@@ -52,7 +52,7 @@ describe('getTeamFormStats', () => {
       ]);
 
       // Act
-      const result = await getTeamFormStats('teamA');
+      const result = await getTeamFormStats('teamA', new Date('2099-01-01T00:00:00Z'));
 
       // Assert
       expect(result.last3.matches).toBe(3);
@@ -78,7 +78,7 @@ describe('getTeamFormStats', () => {
       ]);
 
       // Act
-      const result = await getTeamFormStats('teamA');
+      const result = await getTeamFormStats('teamA', new Date('2099-01-01T00:00:00Z'));
 
       // Assert
       expect(result.last5.matches).toBe(5);
@@ -98,7 +98,7 @@ describe('getTeamFormStats', () => {
       (matchHistoryProvider.getTeamMatches as any).mockResolvedValue(matches);
 
       // Act
-      const result = await getTeamFormStats('teamA');
+      const result = await getTeamFormStats('teamA', new Date('2099-01-01T00:00:00Z'));
 
       // Assert
       expect(result.last10.matches).toBe(10);
@@ -117,7 +117,7 @@ describe('getTeamFormStats', () => {
       ]);
 
       // Act
-      const result = await getTeamFormStats('teamA');
+      const result = await getTeamFormStats('teamA', new Date('2099-01-01T00:00:00Z'));
 
       // Assert
       expect(result.last3.matches).toBe(3);
@@ -138,7 +138,7 @@ describe('getTeamFormStats', () => {
       ]);
 
       // Act
-      const result = await getTeamFormStats('teamA');
+      const result = await getTeamFormStats('teamA', new Date('2099-01-01T00:00:00Z'));
 
       // Assert
       expect(result.last3.matches).toBe(1);
@@ -159,7 +159,7 @@ describe('getTeamFormStats', () => {
       ]);
 
       // Act
-      const result = await getTeamFormStats('teamA');
+      const result = await getTeamFormStats('teamA', new Date('2099-01-01T00:00:00Z'));
 
       // Assert
       // Expected last3: m3 (3GF), m4 (4GF), m5 (5GF) = sum 12GF
@@ -177,7 +177,7 @@ describe('getTeamFormStats', () => {
       ]);
 
       // Act
-      const result = await getTeamFormStats('teamA');
+      const result = await getTeamFormStats('teamA', new Date('2099-01-01T00:00:00Z'));
       const stats = result.last3;
 
       // Assert
@@ -206,7 +206,7 @@ describe('getTeamFormStats', () => {
       ]);
 
       // Act
-      const result = await getTeamFormStats('teamA');
+      const result = await getTeamFormStats('teamA', new Date('2099-01-01T00:00:00Z'));
       const stats = result.last3;
 
       // Assert
@@ -230,7 +230,7 @@ describe('getTeamFormStats', () => {
       ]);
 
       // Act
-      const result = await getTeamFormStats('teamA');
+      const result = await getTeamFormStats('teamA', new Date('2099-01-01T00:00:00Z'));
       const stats = result.last5; // covers all 4 matches since fewer than 5
 
       // Assert
@@ -250,7 +250,7 @@ describe('getTeamFormStats', () => {
       (matchHistoryProvider.getTeamMatches as any).mockResolvedValue([]);
 
       // Act
-      const result = await getTeamFormStats('teamA');
+      const result = await getTeamFormStats('teamA', new Date('2099-01-01T00:00:00Z'));
 
       // Assert
       for (const windowKey of ['last3', 'last5', 'last10'] as const) {
@@ -291,7 +291,7 @@ describe('getTeamFormStats', () => {
       ]);
 
       // Act
-      const result = await getTeamFormStats('teamA');
+      const result = await getTeamFormStats('teamA', new Date('2099-01-01T00:00:00Z'));
       const stats = result.last3;
 
       // Assert
@@ -318,7 +318,7 @@ describe('getTeamFormStats', () => {
       ]);
 
       // Act
-      const result = await getTeamFormStats('teamA');
+      const result = await getTeamFormStats('teamA', new Date('2099-01-01T00:00:00Z'));
 
       // Assert
       // last3: m4, m5, m6 -> 3 wins, 9 points

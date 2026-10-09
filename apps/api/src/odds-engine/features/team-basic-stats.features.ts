@@ -2,15 +2,17 @@ import { matchHistoryProvider } from '../providers/match-history.provider';
 import { NormalizedMatch } from '../providers/match-history.types';
 import { BasicTeamStats } from './team-basic-stats.types';
 
-export async function getBasicTeamStats(teamId: string): Promise<BasicTeamStats> {
-  const allMatches = await matchHistoryProvider.getTeamMatches(teamId);
+export async function getBasicTeamStats(teamId: string, asOf: Date): Promise<BasicTeamStats> {
+  // Temporal cutoff documented: only matches with matchDate < asOf are considered.
+  const allMatches = await matchHistoryProvider.getTeamMatches(teamId, asOf);
 
-  // Filter eligible matches: FINISHED and both scores not null
+  // Filter eligible matches: FINISHED, both scores not null, and date < asOf
   const eligibleMatches = allMatches.filter(
     (match) =>
       match.status === 'FINISHED' &&
       match.homeScore !== null &&
-      match.awayScore !== null
+      match.awayScore !== null &&
+      match.matchDate < asOf
   );
 
   // Initialize counters

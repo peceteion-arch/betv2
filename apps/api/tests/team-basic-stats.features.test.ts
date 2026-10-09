@@ -26,20 +26,35 @@ describe('getBasicTeamStats', () => {
     matchDate: string = '2026-09-01T18:00:00Z'
   ) {
     return {
-      id,
+      matchId: id,
       homeTeamId,
       awayTeamId,
+      homeTeamName: `Team ${homeTeamId}`,
+      awayTeamName: `Team ${awayTeamId}`,
       competitionId: 'c1',
       matchday,
       matchDate: new Date(matchDate),
       status,
       homeScore,
       awayScore,
-      homeTeam: { id: homeTeamId, name: `Team ${homeTeamId}`, logoUrl: null },
-      awayTeam: { id: awayTeamId, name: `Team ${awayTeamId}`, logoUrl: null },
-      competition: { id: 'c1', name: 'Competition', logoUrl: null, active: true },
     };
   }
+
+  describe('Test Temporal Safety', () => {
+    it('should include eligible match, exclude future/same-date/non-eligible matches', async () => {
+      const asOf = new Date('2026-09-05T12:00:00Z');
+      (matchHistoryProvider.getTeamMatches as any).mockResolvedValue([
+        createMatch('m1', 'teamA', 'teamB', 2, 1, 'FINISHED', 1, '2026-09-04T12:00:00Z'), // Eligible
+        createMatch('m2', 'teamA', 'teamC', 2, 1, 'FINISHED', 2, '2026-09-05T12:00:00Z'), // Same date (exclude)
+        createMatch('m3', 'teamA', 'teamD', 2, 1, 'FINISHED', 3, '2026-09-06T12:00:00Z'), // Future (exclude)
+        createMatch('m4', 'teamA', 'teamE', 2, 1, 'SCHEDULED', 4, '2026-09-03T12:00:00Z'), // SCHEDULED (exclude)
+      ]);
+
+      const result = await getBasicTeamStats('teamA', asOf);
+      expect(result.matches).toBe(1);
+      expect(result.goalsFor).toBe(2);
+    });
+  });
 
   describe('Test 1 — wins/draws/losses', () => {
     it('should calculate wins, draws, losses correctly', async () => {
@@ -51,7 +66,7 @@ describe('getBasicTeamStats', () => {
       ]);
 
       // Act
-      const result = await getBasicTeamStats('teamA');
+      const result = await getBasicTeamStats('teamA', new Date('2099-01-01T00:00:00Z'));
 
       // Assert
       expect(result.matches).toBe(3);
@@ -72,7 +87,7 @@ describe('getBasicTeamStats', () => {
       ]);
 
       // Act
-      const result = await getBasicTeamStats('teamA');
+      const result = await getBasicTeamStats('teamA', new Date('2099-01-01T00:00:00Z'));
 
       // Assert
       expect(result.goalsFor).toBe(5); // 3 + 0 + 2
@@ -94,7 +109,7 @@ describe('getBasicTeamStats', () => {
       ]);
 
       // Act
-      const result = await getBasicTeamStats('teamA');
+      const result = await getBasicTeamStats('teamA', new Date('2099-01-01T00:00:00Z'));
 
       // Assert
       expect(result.cleanSheets).toBe(2);
@@ -112,7 +127,7 @@ describe('getBasicTeamStats', () => {
       ]);
 
       // Act
-      const result = await getBasicTeamStats('teamA');
+      const result = await getBasicTeamStats('teamA', new Date('2099-01-01T00:00:00Z'));
 
       // Assert
       expect(result.failedToScore).toBe(2);
@@ -131,7 +146,7 @@ describe('getBasicTeamStats', () => {
       ]);
 
       // Act
-      const result = await getBasicTeamStats('teamA');
+      const result = await getBasicTeamStats('teamA', new Date('2099-01-01T00:00:00Z'));
 
       // Assert
       expect(result.bttsYes).toBe(2);
@@ -150,7 +165,7 @@ describe('getBasicTeamStats', () => {
       ]);
 
       // Act
-      const result = await getBasicTeamStats('teamA');
+      const result = await getBasicTeamStats('teamA', new Date('2099-01-01T00:00:00Z'));
 
       // Assert
       expect(result.over15).toBe(3); // Matches 2, 3, 4
@@ -174,7 +189,7 @@ describe('getBasicTeamStats', () => {
       ]);
 
       // Act
-      const result = await getBasicTeamStats('teamA');
+      const result = await getBasicTeamStats('teamA', new Date('2099-01-01T00:00:00Z'));
 
       // Assert
       expect(result.matches).toBe(1); // Only m1

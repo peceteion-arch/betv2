@@ -40,7 +40,7 @@ describe('matchHistoryProvider', () => {
         matchRecord({ id: 'm2', homeTeamId: 't3', awayTeamId: 't1', matchDate: new Date('2026-09-02T18:00:00Z') }),
       ]);
 
-      const res = await matchHistoryProvider.getTeamMatches('t1');
+      const res = await matchHistoryProvider.getTeamMatches('t1', new Date('2026-09-10T00:00:00Z'));
       expect(res.length).toBe(2);
       expect(res.map((r) => r.matchId)).toEqual(['m1', 'm2']);
       expect((prisma.match.findMany as any).mock.calls[0][0].where.OR).toBeDefined();
@@ -54,7 +54,7 @@ describe('matchHistoryProvider', () => {
         matchRecord({ id: 'm4', matchDate: new Date('2026-09-11T18:00:00Z') }),
       ]);
 
-      const res = await matchHistoryProvider.getRecentTeamMatches('t1', 2);
+      const res = await matchHistoryProvider.getRecentTeamMatches('t1', 2, new Date('2099-01-01T00:00:00Z'));
       expect(res.length).toBe(2);
       expect((prisma.match.findMany as any).mock.calls[0][0].take).toBe(2);
     });
@@ -65,7 +65,7 @@ describe('matchHistoryProvider', () => {
         matchRecord({ id: 'm5', matchDate: new Date('2026-09-05T18:00:00Z') }),
       ]);
 
-      const res = await matchHistoryProvider.getRecentTeamMatches('t1', 2);
+      const res = await matchHistoryProvider.getRecentTeamMatches('t1', 2, new Date('2099-01-01T00:00:00Z'));
       expect(res[0].matchId).toBe('m5');
       expect(res[1].matchId).toBe('m6');
     });
@@ -78,7 +78,7 @@ describe('matchHistoryProvider', () => {
         matchRecord({ id: 'm8', homeTeamId: 'tB', awayTeamId: 'tA', matchDate: new Date('2026-09-02T18:00:00Z') }),
       ]);
 
-      const res = await matchHistoryProvider.getHeadToHead('tA', 'tB');
+      const res = await matchHistoryProvider.getHeadToHead('tA', 'tB', new Date('2026-09-10T00:00:00Z'));
       expect(res.length).toBe(2);
       expect(res.map((r) => r.matchId)).toEqual(['m7', 'm8']);
     });
@@ -93,7 +93,7 @@ describe('matchHistoryProvider', () => {
       matchRecord({ id: 'm9', homeScore: null, awayScore: null, status: 'SCHEDULED' }),
     ]);
 
-    const res = await matchHistoryProvider.getTeamMatches('t1');
+    const res = await matchHistoryProvider.getTeamMatches('t1', new Date('2026-09-10T00:00:00Z'));
     expect(res[0].homeScore).toBeNull();
     expect(res[0].awayScore).toBeNull();
   });

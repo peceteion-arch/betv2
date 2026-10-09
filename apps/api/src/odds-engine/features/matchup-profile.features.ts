@@ -12,16 +12,17 @@ import { MatchupProfile } from './matchup-profile.types';
  */
 export async function getMatchupProfile(
   teamAId: string,
-  teamBId: string
+  teamBId: string,
+  asOf: Date
 ): Promise<MatchupProfile> {
   if (teamAId === teamBId) {
     throw new Error('teamAId and teamBId must be different');
   }
 
   const [teamA, teamB, h2h] = await Promise.all([
-    getTeamProfile(teamAId),
-    getTeamProfile(teamBId),
-    getH2HStats(teamAId, teamBId),
+    getTeamProfile(teamAId, asOf),
+    getTeamProfile(teamBId, asOf),
+    getH2HStats(teamAId, teamBId, asOf),
   ]);
 
   return {
