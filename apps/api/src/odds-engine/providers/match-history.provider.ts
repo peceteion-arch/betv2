@@ -23,10 +23,24 @@ function normalizeMatch(match: MatchWithTeams): NormalizedMatch {
   };
 }
 
+/**
+ * Validates the asOf parameter for temporal safety.
+ * Must be a valid Date object.
+ */
+function validateAsOf(asOf: Date): void {
+  if (asOf === undefined || asOf === null) {
+    throw new TypeError('asOf must be a valid Date');
+  }
+  if (!(asOf instanceof Date) || isNaN(asOf.getTime())) {
+    throw new TypeError('asOf must be a valid Date');
+  }
+}
+
 export const matchHistoryProvider = {
   // Temporal cutoff rule (PASUL 1.5A): only matches BEFORE asOf are eligible.
   // Comparison is strict: matchDate < asOf. A match exactly at asOf or after is excluded.
   async getTeamMatches(teamId: string, asOf: Date): Promise<NormalizedMatch[]> {
+    validateAsOf(asOf);
     const matches = await prisma.match.findMany({
       where: {
         OR: [{ homeTeamId: teamId }, { awayTeamId: teamId }],
@@ -42,6 +56,7 @@ export const matchHistoryProvider = {
   },
 
   async getRecentTeamMatches(teamId: string, limit: number, asOf: Date): Promise<NormalizedMatch[]> {
+    validateAsOf(asOf);
     const matches = await prisma.match.findMany({
       where: {
         OR: [{ homeTeamId: teamId }, { awayTeamId: teamId }],
@@ -59,6 +74,7 @@ export const matchHistoryProvider = {
   },
 
   async getHeadToHead(teamAId: string, teamBId: string, asOf: Date): Promise<NormalizedMatch[]> {
+    validateAsOf(asOf);
     if (teamAId === teamBId) {
       throw new Error('teamAId and teamBId must be different');
     }

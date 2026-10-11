@@ -33,6 +33,33 @@ describe('matchHistoryProvider', () => {
     vi.resetAllMocks();
   });
 
+  describe('Validation - asOf parameter', () => {
+    const invalidValues = [
+      { val: undefined, name: 'undefined' },
+      { val: null, name: 'null' },
+      { val: '2026-01-01', name: 'string' },
+      { val: 123456789, name: 'number' },
+      { val: new Date('invalid-date'), name: 'Invalid Date object' },
+      { val: {}, name: 'empty object' },
+    ];
+
+    it.each(invalidValues)('getTeamMatches should reject $name', async ({ val }) => {
+      await expect(matchHistoryProvider.getTeamMatches('t1', val as any)).rejects.toThrow(TypeError);
+      await expect(matchHistoryProvider.getTeamMatches('t1', val as any)).rejects.toThrow('asOf must be a valid Date');
+      expect(prisma.match.findMany).not.toHaveBeenCalled();
+    });
+
+    it.each(invalidValues)('getRecentTeamMatches should reject $name', async ({ val }) => {
+      await expect(matchHistoryProvider.getRecentTeamMatches('t1', 5, val as any)).rejects.toThrow(TypeError);
+      expect(prisma.match.findMany).not.toHaveBeenCalled();
+    });
+
+    it.each(invalidValues)('getHeadToHead should reject $name', async ({ val }) => {
+      await expect(matchHistoryProvider.getHeadToHead('t1', 't2', val as any)).rejects.toThrow(TypeError);
+      expect(prisma.match.findMany).not.toHaveBeenCalled();
+    });
+  });
+
   describe('getTeamMatches', () => {
     it('finds both home and away matches', async () => {
       (prisma.match.findMany as any).mockResolvedValue([
@@ -44,6 +71,17 @@ describe('matchHistoryProvider', () => {
       expect(res.length).toBe(2);
       expect(res.map((r) => r.matchId)).toEqual(['m1', 'm2']);
       expect((prisma.match.findMany as any).mock.calls[0][0].where.OR).toBeDefined();
+      expect((prisma.match.findMany as any).mock.calls[0][0].where.matchDate.lt).toBeDefined();
+    });
+
+    it('strictly uses lt (less than) for asOf comparison', async () => {
+      (prisma.match.findMany as any).mockResolvedValue([]);
+      const asOf = new Date('2026-09-10T00:00:00Z');
+      await matchHistoryProvider.getTeamMatches('t1', asOf);
+
+      const findManyCall = (prisma.match.findMany as any).mock.calls[0][0];
+      expect(findManyCall.where.matchDate.lt).toEqual(asOf);
+      expect(findManyCall.where.matchDate.lte).toBeUndefined();
     });
   });
 
