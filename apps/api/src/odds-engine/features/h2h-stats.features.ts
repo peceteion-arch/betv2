@@ -41,8 +41,8 @@ export async function getH2HStats(
   for (const match of h2hEligibleMatches) {
     // Determine goals from the perspective of Team A / Team B.
     const isTeamAHome = match.homeTeamId === teamAId;
-    const teamAGoalsForThisMatch = isTeamAHome ? match.homeScore : match.awayScore;
-    const teamBGoalsForThisMatch = isTeamAHome ? match.awayScore : match.homeScore;
+    const teamAGoalsForThisMatch = isTeamAHome ? match.homeScore! : match.awayScore!;
+    const teamBGoalsForThisMatch = isTeamAHome ? match.awayScore! : match.homeScore!;
 
     // Update goals
     teamAGoals += teamAGoalsForThisMatch;
