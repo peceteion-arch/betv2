@@ -76,6 +76,7 @@ export async function getH2HStats(
   const teamBWinRate = matches > 0 ? teamBWins / matches : null;
   const averageTotalGoals = matches > 0 ? (teamAGoals + teamBGoals) / matches : null;
 
+  // Calculate score distribution only for eligible H2H matches
   const scoreDistribution = calculateScoreDistribution(
     eligibleMatches.map((match) => {
       const isTeamAHome = match.homeTeamId === teamAId;

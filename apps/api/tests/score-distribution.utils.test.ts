@@ -38,4 +38,28 @@ describe('calculateScoreDistribution', () => {
     const sumCount = result.scorelines.reduce((acc, s) => acc + s.count, 0);
     expect(sumCount).toBe(result.matchesTotal);
   });
+
+  it('should have rates summing to 1', () => {
+    const matches = [{ goalsFor: 1, goalsAgainst: 0 }, { goalsFor: 0, goalsAgainst: 1 }, { goalsFor: 1, goalsAgainst: 1 }];
+    const result = calculateScoreDistribution(matches);
+    const sumRate = result.scorelines.reduce((acc, s) => acc + s.rate, 0);
+    expect(sumRate).toBeCloseTo(1);
+  });
+
+  it('should handle non-numeric values', () => {
+    const matches = [
+      { goalsFor: '1' as any, goalsAgainst: 0 },
+      { goalsFor: undefined as any, goalsAgainst: 0 },
+      { goalsFor: null as any, goalsAgainst: 0 }
+    ];
+    const result = calculateScoreDistribution(matches);
+    expect(result.matchesTotal).toBe(0);
+  });
+
+  it('should maintain sort order', () => {
+    const matches = [{ goalsFor: 2, goalsAgainst: 1 }, { goalsFor: 1, goalsAgainst: 2 }];
+    const result = calculateScoreDistribution(matches);
+    expect(result.scorelines[0].goalsFor).toBe(1);
+    expect(result.scorelines[1].goalsFor).toBe(2);
+  });
 });
