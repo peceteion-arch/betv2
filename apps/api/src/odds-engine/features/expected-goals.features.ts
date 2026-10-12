@@ -2,91 +2,111 @@ import { matchHistoryProvider } from '../providers/match-history.provider';
 import { NormalizedMatch } from '../providers/match-history.types';
 import { ExpectedGoals, ExpectedGoalsResult } from './expected-goals.types';
 
-const M = 5; // Constanta de temperare (Bayesian Shrinkage)
-
 /**
  * Calculează golurile așteptate (xG) pentru gazde și oaspeți.
- * Formula: lambdaH = MeanH * HomeAttack * AwayDefense
- * Formula: lambdaA = MeanA * AwayAttack * HomeDefense
+ * Formula normalizată:
+ * lambdaHome = (homeTeamHomeGoalsForAvg * awayTeamAwayGoalsAgainstAvg) / competitionHomeGoalsAvg
+ * lambdaAway = (awayTeamAwayGoalsForAvg * homeTeamHomeGoalsAgainstAvg) / competitionAwayGoalsAvg
+ *
+ * Toate mediile sunt calculate doar din meciurile FINISHED ale competiției date.
  */
 export async function getExpectedGoals(
   homeTeamId: string,
   awayTeamId: string,
-  asOf: Date
+  asOf: Date,
+  competitionId: string
 ): Promise<ExpectedGoalsResult> {
+  // Obține toate mecanțele echipelor (fără filtrer de competiție – vom filtra ulterior)
   const homeMatches = await matchHistoryProvider.getTeamMatches(homeTeamId, asOf);
   const awayMatches = await matchHistoryProvider.getTeamMatches(awayTeamId, asOf);
 
+  // Filtrăm mecajele eligibile: FINISHED, scoruri numerice, nenegative, dată < asOf, și competencia corespunzătoare
+  const isEligible = (m: NormalizedMatch): boolean =>
+    m.status === 'FINISHED' &&
+    m.homeScore !== null &&
+    m.awayScore !== null &&
+    m.homeScore >= 0 &&
+    m.awayScore >= 0 &&
+    m.matchDate < asOf &&
+    m.competitionId === competitionId;
+
   const eligibleHome = homeMatches.filter(isEligible);
   const eligibleAway = awayMatches.filter(isEligible);
+  // Mecajele competitiei (folosim oricare dintre liste, filtrările sunt identice)
+  const eligibleMatches = eligibleHome.length > 0 ? eligibleHome : eligibleAway; // orice listă funcționa pentru mediile de competiție
+  // Pentru siguranță, recomputăm din unite:
+  const allMatches = [...homeMatches, ...awayMatches].filter(isEligible);
 
-  // 1. Calculăm mediile pe competiție (Baseline)
-  // Deoarece un meci poate avea competitionId diferit, extragem un baseline simplificat
-  // pentru fiecare echipă din istoricul propriu.
-  const homeStats = calculateStats(eligibleHome, homeTeamId);
-  const awayStats = calculateStats(eligibleAway, awayTeamId);
-
-  // 2. Baseline-uri (dacă nu există date, returnăm null)
-  if (homeStats.matches === 0 || awayStats.matches === 0) {
+  // Dacă nu avem suficiente date pentru competiție, returnăm indisponibilitate
+  if (eligibleMatches.length === 0) {
     return {
       home: { teamId: homeTeamId, expectedGoalsFor: null, expectedGoalsAgainst: null, matchesUsed: 0 },
       away: { teamId: awayTeamId, expectedGoalsFor: null, expectedGoalsAgainst: null, matchesUsed: 0 }
     };
   }
 
-  // Mediile echipelor (temperat)
-  const homeAttack = (homeStats.gf / homeStats.matches);
-  const awayDefense = (awayStats.ga / awayStats.matches);
-  const awayAttack = (awayStats.gf / awayStats.matches);
-  const homeDefense = (homeStats.ga / homeStats.matches);
+  // --- Calcule pentru competiție (baseline) ---
+  let competitionHomeGoalsSum = 0;
+  let competitionAwayGoalsSum = 0;
+  for (const m of eligibleMatches) {
+    competitionHomeGoalsSum += m.homeScore!;
+    competitionAwayGoalsSum += m.awayScore!;
+  }
+  const competitionHomeGoalsAvg = competitionHomeGoalsSum / eligibleMatches.length;
+  const competitionAwayGoalsAvg = competitionAwayGoalsSum / eligibleMatches.length;
 
-  // Calculăm lambda
-  // Aceasta este o primă versiune: xG_H = AttackH * DefenseA
+  // --- Statistici gazdă (mecaje acasă) ---
+  let homeTeamHomeGF = 0;   // goluri marcate de gazdă când e gazdă
+  let homeTeamHomeGA = 0;   // goluri primite de gazdă când e gazdă
+  let homeTeamHomeCount = 0;
+  for (const m of eligibleHome) {
+    if (m.homeTeamId === homeTeamId) {
+      homeTeamHomeGF += m.homeScore!;
+      homeTeamHomeGA += m.awayScore!;
+      homeTeamHomeCount++;
+    }
+  }
+  const homeTeamHomeGoalsForAvg = homeTeamHomeCount > 0 ? homeTeamHomeGF / homeTeamHomeCount : 0;
+  const homeTeamHomeGoalsAgainstAvg = homeTeamHomeCount > 0 ? homeTeamHomeGA / homeTeamHomeCount : 0;
+
+  // --- Statistici oaspete (mecaje în deplasare) ---
+  let awayTeamAwayGF = 0;   // goluri marcate de oaspete când e oaspete
+  let awayTeamAwayGA = 0;   // goluri primite de oaspete când e oaspete (goluri gazdei)
+  let awayTeamAwayCount = 0;
+  for (const m of eligibleAway) {
+    if (m.awayTeamId === awayTeamId) {
+      awayTeamAwayGF += m.awayScore!;
+      awayTeamAwayGA += m.homeScore!;
+      awayTeamAwayCount++;
+    }
+  }
+  const awayTeamAwayGoalsForAvg = awayTeamAwayCount > 0 ? awayTeamAwayGF / awayTeamAwayCount : 0;
+  const awayTeamAwayGoalsAgainstAvg = awayTeamAwayCount > 0 ? awayTeamAwayGA / awayTeamAwayCount : 0;
+
+  // Verificăm divizori zero pentru mediile de competiție
+  if (competitionHomeGoalsAvg === 0 || competitionAwayGoalsAvg === 0) {
+    return {
+      home: { teamId: homeTeamId, expectedGoalsFor: null, expectedGoalsAgainst: null, matchesUsed: homeTeamHomeCount },
+      away: { teamId: awayTeamId, expectedGoalsFor: null, expectedGoalsAgainst: null, matchesUsed: awayTeamAwayCount }
+    };
+  }
+
+  // Lambdas pe baza formulei normalizate
+  const lambdaHome = (homeTeamHomeGoalsForAvg * awayTeamAwayGoalsAgainstAvg) / competitionHomeGoalsAvg;
+  const lambdaAway = (awayTeamAwayGoalsForAvg * homeTeamHomeGoalsAgainstAvg) / competitionAwayGoalsAvg;
+
   return {
     home: {
       teamId: homeTeamId,
-      expectedGoalsFor: homeAttack * awayDefense,
-      expectedGoalsAgainst: homeDefense * awayAttack,
-      matchesUsed: homeStats.matches
+      expectedGoalsFor: lambdaHome,
+      expectedGoalsAgainst: null, // nu este potrzeb în acest context
+      matchesUsed: homeTeamHomeCount
     },
     away: {
       teamId: awayTeamId,
-      expectedGoalsFor: awayAttack * homeDefense,
-      expectedGoalsAgainst: awayDefense * homeAttack,
-      matchesUsed: awayStats.matches
+      expectedGoalsFor: lambdaAway,
+      expectedGoalsAgainst: null,
+      matchesUsed: awayTeamAwayCount
     }
   };
-}
-
-function isEligible(match: NormalizedMatch): boolean {
-  return (
-    match.status === 'FINISHED' &&
-    match.homeScore !== null &&
-    match.awayScore !== null
-  );
-}
-
-interface InternalStats {
-  gf: number;
-  ga: number;
-  matches: number;
-}
-
-function calculateStats(matches: NormalizedMatch[], teamId: string): InternalStats {
-  let gf = 0;
-  let ga = 0;
-  let count = 0;
-
-  for (const match of matches) {
-    const isHome = match.homeTeamId === teamId;
-    const goalsFor = isHome ? match.homeScore! : match.awayScore!;
-    const goalsAgainst = isHome ? match.awayScore! : match.homeScore!;
-    
-    if (goalsFor < 0 || goalsAgainst < 0) continue;
-
-    gf += goalsFor;
-    ga += goalsAgainst;
-    count++;
-  }
-  return { gf, ga, matches: count };
 }
