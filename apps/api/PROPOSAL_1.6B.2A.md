@@ -1,6 +1,6 @@
-# BETV2 — PASUL 1.6B.2A.2: Finalizarea designului pentru distribuția scorurilor exacte
+# BETV2 — PASUL 1.6B.2A.3: Corecturi finale de proiectare
 
-## 1. Contract TypeScript
+## 1. Contract TypeScript (unchanged)
 
 ```typescript
 // Reprezintă frecvența unui scor specific (x-y)
@@ -26,7 +26,7 @@ export interface ScoreDistribution {
 - **Invariant de sumă**: `sum(scorelines.map(s => s.count)) === matchesTotal`.
 - **Unicitate**: Fiecare pereche `(goalsFor, goalsAgainst)` apare o singură dată în `scorelines`.
 
-## 2. Integrare fără contradicții
+## 2. Integrare fără contradicții (CORECTAT)
 
 - **Nu modificăm** `BasicTeamStats` (rămâne utilizat și pentru statisticile acasă/deplasare).
 - **Adăugăm** distribuția totală a echipei în `TeamProfile`:
@@ -61,125 +61,170 @@ export interface ScoreDistribution {
   ```
 - **Nu extindem** `HomeAwayStats` în această etapă. Distribuțiile distincte pentru acasă/deplasare vor fi evaluate separat.
 
-## 3. Eligibilitate și perspectivă
+## 3. Utilitar comun (NOU)
 
-- **Regula de eligibilitate** este aceeasi ca pentru statisticile existente:
-  - `match.status === 'FINISHED'`
-  - `match.homeScore !== null` și `match.awayScore !== null`
-  - `match.matchDate < asOf` (strict, nu include data-limită).
-- **Perspectiva echipei** (pentru `TeamProfile.scoreDistribution`):
-  - Pentru fiecare meci eligibil, determinăm dacă echipa este gazdă или оспор.
-  - `goalsFor` = scorul echipei (acasa sau in deplasare).
-  - `goalsAgainst` = scorul adversarului.
-- **Perspectiva H2H** (pentru `H2HStats.scoreDistribution`):
-  - Scorul este întotdeauna din perspectiva **echipei A** (primul argument al funcției).
-  - Dacă echipa A este gazdă: `goalsFor = homeScore`, `goalsAgainst = awayScore`.
-  - Dacă echipa A este ospitală: `goalsFor = awayScore`, `goalsAgainst = homeScore`.
-  - **Inversarea echipelor** (schimbarea lui `teamAId` cu `teamBId`) trebuie să inverseze și scorul:
-    - Un meci cu scorul `3–1` din perspectiva A devine `1–3` din perspectiva B.
+Creăm un fișier dedicat: `apps/api/src/odds-engine/helpers/score-distribution.helper.ts`
 
-### Observații privind `NormalizedMatch`
 ```typescript
-export interface NormalizedMatch {
-  matchId: string;
-  homeTeamId: string;
-  awayTeamId: string;
-  homeTeamName: string;
-  awayTeamName: string;
-  competitionId: string | null;
-  matchday: number;
-  matchDate: Date;
-  status: string;
-  homeScore: number | null;
-  awayScore: number | null;
-}
-```
-Toate câmpurile necesare sunt prezente.
+/**
+ * Calculează distribuția scorurilor exacte dintr-o listă de meciuri ELIGIBILE.
+ * 
+ * @param matches - Lista de meciuri care sunt DEJA eligibile (aplicaţi filtrul înainte)
+ * @param teamId - ID-ul echipei din perspectiva căreia se calculează distribuția
+ * @returns Obiectul ScoreDistribution cu scorurile sortate determinist
+ * 
+ * Note: Funcţia NU aplică filtrarea de eligibilitate. Este responsabilitatea apelantului
+ * să passe doar meciurile care îndeplesc: status === 'FINISHED', homeScore !== null, 
+ * awayScore !== null, matchDate < asOf.
+ */
+export function calculateScoreDistribution(
+  matches: NormalizedMatch[], 
+  teamId: string
+): ScoreDistribution {
+  const frequencyMap = new Map<string, ExactScoreFrequency>();
 
-## 4. Invariante (detaliat)
+  for (const match of matches) {
+    // Verificare apartenență echipei la meci (din contractul apelantului)
+    const isHome = match.homeTeamId === teamId;
+    const isAway = match.awayTeamId === teamId;
+    
+    if (!isHome && !isAway) {
+      // Această situaţie nu ar trebui să se întâmple dacă apelantul filtrează corect
+      // Dar pentru siguranţă, ignorăm meciurile în care echipa nu participă
+      continue;
+    }
 
-Pentru orice instanță `ScoreDistribution` derivată:
-1. `sum(scorelines.map(s => s.count)) === matchesTotal`.
-2. Fiecare pereche distinctă `(goalsFor, goalsAgainst)` apare exact o singură dată în `scorelines`.
-3. Pentru `matchesTotal > 0`: pentru orice element din `scorelines`, `rate = count / matchesTotal`.
-4. `matchesTotal` coincide cu numărul de meciuri eligibile filtrate după regulile de la secţiunea 3.
-5. Dacă `matchesTotal = 0`, atunci `scorelines = []` și nu se efectuează nicio împărţire.
-
-## 5. Fișiere și teste
-
-### Fișiere de creare / modificare
-
-| Fișier | Scop |
-| :--- | :--- |
-| `apps/api/src/odds-engine/features/distrib.types.ts` | **Nou**: defining `ExactScoreFrequency` și `ScoreDistribution`. |
-| `apps/api/src/odds-engine/features/team-profile.types.ts` | Adăugare `scoreDistribution: ScoreDistribution` în `TeamProfile`. |
-| `apps/api/src/odds-engine/features/h2h-stats.types.ts` | Adăugare `scoreDistribution: ScoreDistribution` în `H2HStats`. |
-| `apps/api/src/odds-engine/features/team-basic-stats.features.ts` | Implementare funcție utilitară privată `calculateScoreDistribution(matches: NormalizedMatch[], teamId: string): ScoreDistribution` și integrare în `getBasicTeamStats`. |
-| `apps/api/src/odds-engine/features/h2h-stats.features.ts` | Reutilizare aceleasi utilitare (posibil cu un parametru suplimentar pentru persp.) și integrare în `getH2HStats`. |
-| `apps/api/src/odds-engine/features/team-profile.features.ts` | Actualizare pentru a returna noul câmp `scoreDistribution` din sub-obiectele sale (deoarece `TeamProfile` aggregatează deja `basicStats`, `form`, `homeAway`). Nu este nevoie de modificare majoră dacă utilizăm passthrough. |
-| `apps/api/src/odds-engine/features/matchup-profile.features.ts` | Nu necesita modificare directă (deoarece folosește `getTeamProfile` și `getH2HStats` care au fost actualizate). |
-
-### Utilitar de agregare (sugerat)
-```typescript
-function calculateScoreDistribution(matches: NormalizedMatch[], teamId: string): ScoreDistribution {
-  const map = new Map<string, ExactScoreFrequency>();
-  for (const m of matches) {
-    const isHome = m.homeTeamId === teamId;
-    const gf = isHome ? m.homeScore! : m.awayScore!;
-    const ga = isHome ? m.awayScore! : m.homeScore!;
-    const key = `${gf}-${ga}`;
-    const entry = map.get(key);
-    if (entry) {
-      entry.count++;
+    // Mapare corectă a scorurilor indiferent de locuinţă (acasă/deplasare)
+    const goalsFor = isHome ? match.homeScore! : match.awayScore!;
+    const goalsAgainst = isHome ? match.awayScore! : match.homeScore!;
+    
+    // Generare cheie unică pentru scor (format: "x-y")
+    const key = `${goalsFor}-${goalsAgainst}`;
+    
+    const existing = frequencyMap.get(key);
+    if (existing) {
+      existing.count++;
     } else {
-      map.set(key, { goalsFor: gf, goalsAgainst: ga, count: 1, rate: 0 }); // rate va fi recalculat
+      frequencyMap.set(key, {
+        goalsFor,
+        goalsAgainst,
+        count: 1,
+        rate: 0 // Va fi recalculat mai târziu
+      });
     }
   }
-  const scorelines = Array.from(map.values());
-  // sortare determinist: goalsFor asc, then goalsAgainst asc
+
+  // Convert map to array and sort determinist
+  const scorelines = Array.from(frequencyMap.values());
   scorelines.sort((a, b) => {
     if (a.goalsFor !== b.goalsFor) return a.goalsFor - b.goalsFor;
     return a.goalsAgainst - b.goalsAgainst;
   });
-  const total = scorelines.reduce((sum, s) => sum + s.count, 0);
-  // recalculăm rate-ul
-  for (const s of scorelines) {
-    s.rate = total > 0 ? s.count / total : 0;
+
+  // Calculate total matches and update rates
+  const matchesTotal = scorelines.reduce((sum, entry) => sum + entry.count, 0);
+  
+  for (const entry of scorelines) {
+    entry.rate = matchesTotal > 0 ? entry.count / matchesTotal : 0;
   }
-  return { matchesTotal: total, scorelines };
+
+  return { matchesTotal, scorelines };
 }
 ```
 
-### Teste necesare (pregătiți în `*.features.test.ts`)
+### Semnătura utilitarului - explicări critice
+- **Primește doar meciuri eligibile**: Utilitarul NU aplică filtrarea de eligibilitate (status, scoruri nenule, matchDate < asOf). 
+  Această filtrare trebuie să fie aplicată de apelantul (`getTeamProfile` sau `getH2HStats`) înainte de a apela utilitarul.
+  Aceasta evită duplicarea logicii de filtrare și asigură o singură sursă de adevăr pentru criterii de eligibilitate.
+- **Nu folosi aserțiuni de tip !**: Deoarece funcţia primeşte doar meciuri eligibile (după contractul apelantului), 
+  știm că `homeScore` și `awayScore` nu sunt `null`. Totuși, în cod, accesăm aceste valori prin `match.homeScore!` 
+  și `match.awayScore!` doar după ce am verificat indirekt eligibilitatea prin filtrul apelantului.
+  Dacă dorim să fie mai defensivi, putem adăuga verificări interne, dar aceasta ar duplica logica de eligibilitate.
 
-1. **Scoruri repetate**: două meciuri `1-1` → o intrare cu `count: 2`, `rate: 0.5` (dacă `matchesTotal=2`).
-2. **Scoruri distincte**: `1-0`, `0-1`, `2-2` → trei intrări, fiecare cu `count: 1`.
-3. **Scorul 0-0**: verifică apare corect în listă.
-4. **Istoric gol**: `matchesTotal: 0`, `scorelines: []`.
-5. **Meciuri nefinalizate și scoruri `null`**: SCHEDULED, LIVE, VOID, sau FINISHED cu scor nul → excluse totalmente.
-6. **Limita temporală strictă**: meci cu `matchDate === asOf` → exclus.
-7. **Echipa acasă și în deplasare**: verifică că perspectiva se schimbă corect (ex: echipa A acasă 2-1 → {2,1}; echipa A în deplasare 1-2 → {1,2}).
-8. **Perspectiva H2H inversată**: `getH2HStats('A','B')` vs `getH2HStats('B','A')` trebuie să aibă scorurile inversate și aceleaşi `matchesTotal`.
-9. **Invariantul sumei aparițiilor**: asigură-te că suma `count` din `scorelines` este egală cu `matchesTotal` și cu `matches` din statistica de bază.
-10. **Ordină deterministă**: verifică ordonarea după `goalsFor` apoi `goalsAgainst`.
+## 4. Verificare apartenență și mapare scoruri
 
-### Restricții respectate
+În ambele funcții (`getTeamProfile` și `getH2HStats`), înainte de a apela utilitarul:
+1. **Filtrare eligibilitate**: Aplicăm aceleași reguli ca și la statistici existente:
+   - `match.status === 'FINISHED'`
+   - `match.homeScore !== null` și `match.awayScore !== null`
+   - `match.matchDate < asOf` (strict)
+2. **Verificare apartenență**: Pentru echipa de interes (`teamId`):
+   - În `getTeamProfile`: Verificăm dacă `teamId` corespunde `homeTeamId` sau `awayTeamId` al meciului.
+   - În `getH2HStats`: Pentru perspectiva echipei A, verificăm dacă meciul implicatează ambele echipe A și B 
+     (deja făcut de provider, dar verificăm defensiv).
+3. **Mapare scoruri**:
+   - Dacă echipa este gazdă: `goalsFor = homeScore`, `goalsAgainst = awayScore`
+   - Dacă echipa este ospitală: `goalsFor = awayScore`, `goalsAgainst = homeScore`
 
-- Nu se modifică `generateOdds()`, schema Prisma, decontarea pariurilor, frontendul sau baza SQLite AJM.
-- Nu se introduc Poisson, probabilități predictive sau cote.
-- Nu se extinde scopul cu distribuții `last3/5/10` în această etapă.
+Această abordare asigură că perspektiva este corectă indiferent de locuinţă (acasă/deplasare).
+
+## 5. Teste de consistență
+
+Testele trebuie să verifică:
+
+1. **Egalitatea totalurilor**:
+   - Pentru `TeamProfile`: `profile.scoreDistribution.matchesTotal === profile.basicStats.matches`
+   - Pentru `H2HStats`: `h2h.scoreDistribution.matchesTotal === h2h.matches`
+   
+   Aceasta demonstrează că distribuția folosește aceleași meciuri eligibile ca și statisticile de bază.
+
+2. **Istoric gol**:
+   - Echipe fără mecanuri eligibile → `matchesTotal: 0`, `scorelines: []`
+
+3. **Scoruri repetate și distincte**:
+   - Două mecanuri 1-1 → o intrare cu `count: 2`, `rate: 0.5` (dacă `matchesTotal=2`)
+   - Mecuri 1-0, 0-1, 2-2 → trei intrări, fiecare cu `count: 1`
+
+4. **Scorul 0-0**: Verifică apare corect în listă.
+
+5. **Perspectiva H2H inversată**:
+   - `getH2HStats('A','B').scoreDistribution` vs `getH2HStats('B','A').scoreDistribution`
+   - Scorurile trebuie să fie inversate (ex: 3-1 devine 1-3) iar `matchesTotal` să fie egal.
+
+6. **Locuinţă (acasă/deplasare)**:
+   - Echipa A acasă 2-1 → intrare {2,1}
+   - Echipa A în deplasare 1-2 → intrare {1,2}
+
+7. **Filtrare temporală strictă**:
+   - Mecanul cu `matchDate === asOf` trebuie exclus (nu contează în `matchesTotal`)
+
+8. **Ordină deterministă**: Verifică ordonarea după `goalsFor` apoi `goalsAgainst`.
+
+## 6. Fișiere de cod propuse
+
+### Fișiere de creare
+| Fișier | Scop |
+| :--- | :--- |
+| `apps/api/src/odds-engine/helpers/score-distribution.helper.ts` | **Nou**: Utilitar comun de agregare |
+
+### Fișiere de modificare
+| Fișier | Scop |
+| :--- | :--- |
+| `apps/api/src/odds-engine/features/team-profile.types.ts` | Adăugare `scoreDistribution: ScoreDistribution` |
+| `apps/api/src/odds-engine/features/h2h-stats.types.ts` | Adăugare `scoreDistribution: ScoreDistribution` |
+| `apps/api/src/odds-engine/features/team-profile.features.ts` | Integrare utilitar: filtrare eligibilitate + apel utilitar |
+| `apps/api/src/odds-engine/features/h2h-stats.features.ts` | Integrare utilitar: filtrare eligibilitate + apel utilitar (cu perspectivă corectă) |
+| `apps/api/tests/team-profile.features.test.ts` | Update teste pentru a verifica noul câmp și invariantele |
+| `apps/api/tests/h2h-stats.features.test.ts` | Update teste pentru a verifica noul câmp, simetria și invariantele |
+
+### Fișiere NEMODIFICATE (conform cerinţelor)
+- `apps/api/src/odds-engine/features/team-basic-stats.features.ts` și `.types.ts`
+- `apps/api/src/odds-engine/features/team-home-away.features.ts` și `.types.ts`
+- `apps/api/src/odds-engine/features/team-form.features.ts` și `.types.ts`
+- `apps/api/src/odds-engine/features/matchup-profile.features.ts` și `.types.ts`
+- `apps/api/src/odds-engine/providers/*`
+- `generateOdds()`, schema Prisma, decontarea pariurilor, frontendul, baza SQLite AJM
 
 ## ⚠️ Riscuri rămase
 
-- **Breaking changes prin adăugarea de câmpuri noi** în `TeamProfile` și `H2HStats`: toate consumatorii acestor interfețe vor necesita actualizare (de ex. serializare, UI-uri). Totuşi, deoarece adăugăm doar câmpuri și nu modificăm cei existenţi, impactul este de tip „aditiv”.
-- **Complexitatea logicii de perspektivă** în H2H trebuie implementată cu grijă pentru a evita confundarea entre echipa gazdă și oaspete.
-- **Performance**: agregarea scorurilor este O(n) și utilisează memorie suplimentară proporțională cu numărul de scoruri distincte (de obicei mic).
+- **Breaking changes prin adăugarea de câmpuri noi** în `TeamProfile` și `H2HStats`: consumatorii acestor interfețe (inclusiv serializare, UI-uri) vor necesita actualizare. Deoarece adăugăm doar câmpuri noi fără a modifica cei existenţi, impactul este aditiv și compatibil în sensul că codul existent care nu foloseşte noul câmp va continua să funcționeze.
+- **Corectitudinea perspectivelor** în H2H depinde de implementarea grijăsitoare a mapării scorurilor și verificării appartenenței echipei.
 
 ## ✅ Validare
 
 După implementare, trebuie să rulezi:
-- `npm run build` (verificare fara erori de tipare).
-- `npm run test` (toate teste existente și noi trebuie să treacă).
+- `npm run build` (verificare fără erori de tipare)
+- `npm run test` (toate teste existente și noi trebuie să treacă)
 
 ---
 *Document revizuit la: 2026-10-12*
