@@ -1,3 +1,5 @@
+import { ScoreDistribution } from './score-distribution.utils';
+
 export interface H2HStats {
   teamAId: string;
   teamBId: string;
@@ -19,4 +21,5 @@ export interface H2HStats {
   teamBWinRate: number | null;
 
   averageTotalGoals: number | null;
+  scoreDistribution: ScoreDistribution;
 }

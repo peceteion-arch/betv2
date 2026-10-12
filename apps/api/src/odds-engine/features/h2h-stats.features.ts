@@ -1,6 +1,7 @@
 import { matchHistoryProvider } from '../providers/match-history.provider';
 import { NormalizedMatch } from '../providers/match-history.types';
 import { H2HStats } from './h2h-stats.types';
+import { calculateScoreDistribution } from './score-distribution.utils';
 
 export async function getH2HStats(
   teamAId: string,
@@ -70,6 +71,16 @@ export async function getH2HStats(
   const teamBWinRate = matches > 0 ? teamBWins / matches : null;
   const averageTotalGoals = matches > 0 ? (teamAGoals + teamBGoals) / matches : null;
 
+  const scoreDistribution = calculateScoreDistribution(
+    eligibleMatches.map((match) => {
+      const isTeamAHome = match.homeTeamId === teamAId;
+      return {
+        goalsFor: isTeamAHome ? match.homeScore! : match.awayScore!,
+        goalsAgainst: isTeamAHome ? match.awayScore! : match.homeScore!,
+      };
+    })
+  );
+
   return {
     teamAId,
     teamBId,
@@ -85,5 +96,6 @@ export async function getH2HStats(
     drawRate,
     teamBWinRate,
     averageTotalGoals,
+    scoreDistribution,
   };
 }
