@@ -151,17 +151,17 @@ describe('getMatchupProfile', () => {
 
     const createZeroStats = (teamId: string): BasicTeamStats => ({
       teamId,
-      matches: 0, wins: 0, draws: 0, losses: 0, points: 0, pointsPerMatch: 0,
-      goalsFor: 0, goalsAgainst: 0, goalDifference: 0, goalsForPerMatch: 0, goalsAgainstPerMatch: 0, goalDifferencePerMatch: 0,
-      cleanSheets: 0, cleanSheetRate: 0, failedToScore: 0, failedToScoreRate: 0, bttsYes: 0, bttsRate: 0,
-      over15: 0, over15Rate: 0, over25: 0, over25Rate: 0, over35: 0, over35Rate: 0,
+      matches: 0, wins: 0, draws: 0, losses: 0, points: 0, pointsPerMatch: null,
+      goalsFor: 0, goalsAgainst: 0, goalDifference: 0, goalsForPerMatch: null, goalsAgainstPerMatch: null, goalDifferencePerMatch: null,
+      cleanSheets: 0, cleanSheetRate: null, failedToScore: 0, failedToScoreRate: null, bttsYes: 0, bttsRate: null,
+      over15: 0, over15Rate: null, over25: 0, over25Rate: null, over35: 0, over35Rate: null,
     });
 
     const createZeroFormWindow = (): TeamFormWindowStats => ({
-      matches: 0, wins: 0, draws: 0, losses: 0, points: 0, pointsPerMatch: 0,
-      goalsFor: 0, goalsAgainst: 0, goalDifference: 0, goalsForPerMatch: 0, goalsAgainstPerMatch: 0, goalDifferencePerMatch: 0,
-      cleanSheets: 0, cleanSheetRate: 0, failedToScore: 0, failedToScoreRate: 0, bttsYes: 0, bttsRate: 0,
-      over15: 0, over15Rate: 0, over25: 0, over25Rate: 0, over35: 0, over35Rate: 0,
+      matches: 0, wins: 0, draws: 0, losses: 0, points: 0, pointsPerMatch: null,
+      goalsFor: 0, goalsAgainst: 0, goalDifference: 0, goalsForPerMatch: null, goalsAgainstPerMatch: null, goalDifferencePerMatch: null,
+      cleanSheets: 0, cleanSheetRate: null, failedToScore: 0, failedToScoreRate: null, bttsYes: 0, bttsRate: null,
+      over15: 0, over15Rate: null, over25: 0, over25Rate: null, over35: 0, over35Rate: null,
     });
 
     const zeroProfile = (teamId: string): TeamProfile => ({
@@ -182,8 +182,8 @@ describe('getMatchupProfile', () => {
 
     const zeroH2H: H2HStats = {
       teamAId, teamBId, matches: 0, teamAWins: 0, draws: 0, teamBWins: 0,
-      teamAGoals: 0, teamBGoals: 0, teamAGoalsPerMatch: 0, teamBGoalsPerMatch: 0,
-      teamAWinRate: 0, drawRate: 0, teamBWinRate: 0, averageTotalGoals: 0,
+      teamAGoals: 0, teamBGoals: 0, teamAGoalsPerMatch: null, teamBGoalsPerMatch: null,
+      teamAWinRate: null, drawRate: null, teamBWinRate: null, averageTotalGoals: null,
     };
 
     vi.mocked(teamProfileFeatures.getTeamProfile).mockImplementation(async (id, _asOf) => zeroProfile(id));
@@ -192,7 +192,11 @@ describe('getMatchupProfile', () => {
     const result = await getMatchupProfile(teamAId, teamBId, new Date('2099-01-01T00:00:00Z'));
 
     expect(result.teamA.basicStats.matches).toBe(0);
+    expect(result.teamA.basicStats.pointsPerMatch).toBe(null);
+    expect(result.teamA.form.last3.pointsPerMatch).toBe(null);
     expect(result.teamB.basicStats.matches).toBe(0);
+    expect(result.teamB.basicStats.pointsPerMatch).toBe(null);
     expect(result.h2h.matches).toBe(0);
+    expect(result.h2h.teamAWinRate).toBe(null);
   });
 });
