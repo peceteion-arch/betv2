@@ -76,17 +76,17 @@ export async function getBasicTeamStats(teamId: string, asOf: Date): Promise<Bas
   }
 
   // Calculate derived stats, guarding against division by zero
-  const pointsPerMatch = matches > 0 ? points / matches : 0;
-  const goalsForPerMatch = matches > 0 ? goalsFor / matches : 0;
-  const goalsAgainstPerMatch = matches > 0 ? goalsAgainst / matches : 0;
+  const pointsPerMatch = matches > 0 ? points / matches : null;
+  const goalsForPerMatch = matches > 0 ? goalsFor / matches : null;
+  const goalsAgainstPerMatch = matches > 0 ? goalsAgainst / matches : null;
   const goalDifference = goalsFor - goalsAgainst;
-  const goalDifferencePerMatch = matches > 0 ? goalDifference / matches : 0;
-  const cleanSheetRate = matches > 0 ? cleanSheets / matches : 0;
-  const failedToScoreRate = matches > 0 ? failedToScore / matches : 0;
-  const bttsRate = matches > 0 ? bttsYes / matches : 0;
-  const over15Rate = matches > 0 ? over15 / matches : 0;
-  const over25Rate = matches > 0 ? over25 / matches : 0;
-  const over35Rate = matches > 0 ? over35 / matches : 0;
+  const goalDifferencePerMatch = matches > 0 ? goalDifference / matches : null;
+  const cleanSheetRate = matches > 0 ? cleanSheets / matches : null;
+  const failedToScoreRate = matches > 0 ? failedToScore / matches : null;
+  const bttsRate = matches > 0 ? bttsYes / matches : null;
+  const over15Rate = matches > 0 ? over15 / matches : null;
+  const over25Rate = matches > 0 ? over25 / matches : null;
+  const over35Rate = matches > 0 ? over35 / matches : null;
 
   return {
     teamId,

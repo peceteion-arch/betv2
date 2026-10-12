@@ -60,17 +60,17 @@ function calculateVenueStats(matches: NormalizedMatch[], teamId: string): BasicT
     matchesCount++;
   }
 
-  const pointsPerMatch = matchesCount > 0 ? points / matchesCount : 0;
-  const goalsForPerMatch = matchesCount > 0 ? goalsFor / matchesCount : 0;
-  const goalsAgainstPerMatch = matchesCount > 0 ? goalsAgainst / matchesCount : 0;
+  const pointsPerMatch = matchesCount > 0 ? points / matchesCount : null;
+  const goalsForPerMatch = matchesCount > 0 ? goalsFor / matchesCount : null;
+  const goalsAgainstPerMatch = matchesCount > 0 ? goalsAgainst / matchesCount : null;
   const goalDifference = goalsFor - goalsAgainst;
-  const goalDifferencePerMatch = matchesCount > 0 ? goalDifference / matchesCount : 0;
-  const cleanSheetRate = matchesCount > 0 ? cleanSheets / matchesCount : 0;
-  const failedToScoreRate = matchesCount > 0 ? failedToScore / matchesCount : 0;
-  const bttsRate = matchesCount > 0 ? bttsYes / matchesCount : 0;
-  const over15Rate = matchesCount > 0 ? over15 / matchesCount : 0;
-  const over25Rate = matchesCount > 0 ? over25 / matchesCount : 0;
-  const over35Rate = matchesCount > 0 ? over35 / matchesCount : 0;
+  const goalDifferencePerMatch = matchesCount > 0 ? goalDifference / matchesCount : null;
+  const cleanSheetRate = matchesCount > 0 ? cleanSheets / matchesCount : null;
+  const failedToScoreRate = matchesCount > 0 ? failedToScore / matchesCount : null;
+  const bttsRate = matchesCount > 0 ? bttsYes / matchesCount : null;
+  const over15Rate = matchesCount > 0 ? over15 / matchesCount : null;
+  const over25Rate = matchesCount > 0 ? over25 / matchesCount : null;
+  const over35Rate = matchesCount > 0 ? over35 / matchesCount : null;
 
   return {
     teamId,

@@ -63,12 +63,12 @@ export async function getH2HStats(
   }
 
   // Calculate derived stats, guarding against division by zero
-  const teamAGoalsPerMatch = matches > 0 ? teamAGoals / matches : 0;
-  const teamBGoalsPerMatch = matches > 0 ? teamBGoals / matches : 0;
-  const teamAWinRate = matches > 0 ? teamAWins / matches : 0;
-  const drawRate = matches > 0 ? draws / matches : 0;
-  const teamBWinRate = matches > 0 ? teamBWins / matches : 0;
-  const averageTotalGoals = matches > 0 ? (teamAGoals + teamBGoals) / matches : 0;
+  const teamAGoalsPerMatch = matches > 0 ? teamAGoals / matches : null;
+  const teamBGoalsPerMatch = matches > 0 ? teamBGoals / matches : null;
+  const teamAWinRate = matches > 0 ? teamAWins / matches : null;
+  const drawRate = matches > 0 ? draws / matches : null;
+  const teamBWinRate = matches > 0 ? teamBWins / matches : null;
+  const averageTotalGoals = matches > 0 ? (teamAGoals + teamBGoals) / matches : null;
 
   return {
     teamAId,

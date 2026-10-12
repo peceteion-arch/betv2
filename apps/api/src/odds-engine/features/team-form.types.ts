@@ -4,25 +4,25 @@ export interface TeamFormWindowStats {
   draws: number;
   losses: number;
   points: number;
-  pointsPerMatch: number;
+  pointsPerMatch: number | null;
   goalsFor: number;
   goalsAgainst: number;
   goalDifference: number;
-  goalsForPerMatch: number;
-  goalsAgainstPerMatch: number;
-  goalDifferencePerMatch: number;
+  goalsForPerMatch: number | null;
+  goalsAgainstPerMatch: number | null;
+  goalDifferencePerMatch: number | null;
   cleanSheets: number;
-  cleanSheetRate: number;
+  cleanSheetRate: number | null;
   failedToScore: number;
-  failedToScoreRate: number;
+  failedToScoreRate: number | null;
   bttsYes: number;
-  bttsRate: number;
+  bttsRate: number | null;
   over15: number;
-  over15Rate: number;
+  over15Rate: number | null;
   over25: number;
-  over25Rate: number;
+  over25Rate: number | null;
   over35: number;
-  over35Rate: number;
+  over35Rate: number | null;
 }
 
 export interface TeamFormStats {

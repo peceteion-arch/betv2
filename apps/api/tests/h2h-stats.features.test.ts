@@ -317,21 +317,23 @@ describe('getH2HStats', () => {
     expect(result.teamBWins).toBe(0);
     expect(result.teamAGoals).toBe(0);
     expect(result.teamBGoals).toBe(0);
-    expect(result.teamAGoalsPerMatch).toBe(0);
-    expect(result.teamBGoalsPerMatch).toBe(0);
-    expect(result.teamAWinRate).toBe(0);
-    expect(result.drawRate).toBe(0);
-    expect(result.teamBWinRate).toBe(0);
-    expect(result.averageTotalGoals).toBe(0);
+    expect(result.teamAGoalsPerMatch).toBe(null);
+    expect(result.teamBGoalsPerMatch).toBe(null);
+    expect(result.teamAWinRate).toBe(null);
+    expect(result.drawRate).toBe(null);
+    expect(result.teamBWinRate).toBe(null);
+    expect(result.averageTotalGoals).toBe(null);
 
-    // No NaN / Infinity in numeric fields only
-    const numericKeys = [
+    // Validate numeric fields are finite, and rate fields are null
+    const countKeys = [
       'matches',
       'teamAWins',
       'draws',
       'teamBWins',
       'teamAGoals',
       'teamBGoals',
+    ];
+    const rateKeys = [
       'teamAGoalsPerMatch',
       'teamBGoalsPerMatch',
       'teamAWinRate',
@@ -339,8 +341,12 @@ describe('getH2HStats', () => {
       'teamBWinRate',
       'averageTotalGoals',
     ];
-    numericKeys.forEach((key) => {
+
+    countKeys.forEach((key) => {
       expect(Number.isFinite(result[key] as number)).toBe(true);
+    });
+    rateKeys.forEach((key) => {
+      expect(result[key]).toBe(null);
     });
   });
 

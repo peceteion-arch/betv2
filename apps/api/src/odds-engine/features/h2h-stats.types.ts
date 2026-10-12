@@ -11,12 +11,12 @@ export interface H2HStats {
   teamAGoals: number;
   teamBGoals: number;
 
-  teamAGoalsPerMatch: number;
-  teamBGoalsPerMatch: number;
+  teamAGoalsPerMatch: number | null;
+  teamBGoalsPerMatch: number | null;
 
-  teamAWinRate: number;
-  drawRate: number;
-  teamBWinRate: number;
+  teamAWinRate: number | null;
+  drawRate: number | null;
+  teamBWinRate: number | null;
 
-  averageTotalGoals: number;
+  averageTotalGoals: number | null;
 }

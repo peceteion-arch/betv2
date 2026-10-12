@@ -74,13 +74,13 @@ describe('getTeamFormStats', () => {
   });
 
   describe('Calculation safety', () => {
-    it('should produce 0 for rates when matches are 0', async () => {
+    it('should produce null for rates when matches are 0', async () => {
       (matchHistoryProvider.getTeamMatches as any).mockResolvedValue([]);
       const result = await getTeamFormStats('teamA', new Date('2099-01-01T00:00:00Z'));
 
-      expect(result.last3.pointsPerMatch).toBe(0);
-      expect(result.last3.goalsForPerMatch).toBe(0);
-      expect(result.last3.cleanSheetRate).toBe(0);
+      expect(result.last3.pointsPerMatch).toBe(null);
+      expect(result.last3.goalsForPerMatch).toBe(null);
+      expect(result.last3.cleanSheetRate).toBe(null);
     });
   });
 
