@@ -26,13 +26,10 @@ export async function getTeamProfile(teamId: string, asOf: Date): Promise<TeamPr
   );
 
   const scoreDistribution = calculateScoreDistribution(
-    eligibleMatches.map((match) => {
-      const isHome = match.homeTeamId === teamId;
-      return {
-        goalsFor: isHome ? match.homeScore! : match.awayScore!,
-        goalsAgainst: isHome ? match.awayScore! : match.homeScore!,
-      };
-    })
+    eligibleMatches.map((match) => ({
+      goalsFor: match.homeTeamId === teamId ? match.homeScore : match.awayScore,
+      goalsAgainst: match.homeTeamId === teamId ? match.awayScore : match.homeScore,
+    }))
   );
 
   return {

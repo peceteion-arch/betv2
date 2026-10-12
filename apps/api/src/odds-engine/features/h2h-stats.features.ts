@@ -44,8 +44,13 @@ export async function getH2HStats(
 
     // Determine goals from the perspective of Team A / Team B.
     const isTeamAHome = match.homeTeamId === teamAId;
-    const teamAGoalsForThisMatch = isTeamAHome ? match.homeScore! : match.awayScore!;
-    const teamBGoalsForThisMatch = isTeamAHome ? match.awayScore! : match.homeScore!;
+    const teamAGoalsForThisMatch = isTeamAHome ? match.homeScore : match.awayScore;
+    const teamBGoalsForThisMatch = isTeamAHome ? match.awayScore : match.homeScore;
+
+    if (teamAGoalsForThisMatch === undefined || teamAGoalsForThisMatch === null || 
+        teamBGoalsForThisMatch === undefined || teamBGoalsForThisMatch === null) {
+      continue;
+    }
 
     // Update goals
     teamAGoals += teamAGoalsForThisMatch;
@@ -75,8 +80,8 @@ export async function getH2HStats(
     eligibleMatches.map((match) => {
       const isTeamAHome = match.homeTeamId === teamAId;
       return {
-        goalsFor: isTeamAHome ? match.homeScore! : match.awayScore!,
-        goalsAgainst: isTeamAHome ? match.awayScore! : match.homeScore!,
+        goalsFor: isTeamAHome ? match.homeScore : match.awayScore,
+        goalsAgainst: isTeamAHome ? match.awayScore : match.homeScore,
       };
     })
   );
