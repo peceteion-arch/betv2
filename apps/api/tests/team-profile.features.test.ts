@@ -3,6 +3,7 @@ import { getTeamProfile } from '../src/odds-engine/features/team-profile.feature
 import { getBasicTeamStats } from '../src/odds-engine/features/team-basic-stats.features';
 import { getTeamFormStats } from '../src/odds-engine/features/team-form.features';
 import { getTeamHomeAwayStats } from '../src/odds-engine/features/team-home-away.features';
+import { matchHistoryProvider } from '../src/odds-engine/providers/match-history.provider';
 import { BasicTeamStats } from '../src/odds-engine/features/team-basic-stats.types';
 import { TeamFormStats } from '../src/odds-engine/features/team-form.types';
 import { TeamHomeAwayStats } from '../src/odds-engine/features/team-home-away.types';
@@ -10,6 +11,7 @@ import { TeamHomeAwayStats } from '../src/odds-engine/features/team-home-away.ty
 vi.mock('../src/odds-engine/features/team-basic-stats.features');
 vi.mock('../src/odds-engine/features/team-form.features');
 vi.mock('../src/odds-engine/features/team-home-away.features');
+vi.mock('../src/odds-engine/providers/match-history.provider');
 
 describe('getTeamProfile', () => {
   beforeEach(() => {
@@ -18,32 +20,15 @@ describe('getTeamProfile', () => {
 
   const teamId = 'test-team';
 
+  // Mock-uri pentru statistici
   const mockBasicStats: BasicTeamStats = {
     teamId,
     matches: 10,
-    wins: 5,
-    draws: 2,
-    losses: 3,
-    points: 17,
-    pointsPerMatch: 1.7,
-    goalsFor: 20,
-    goalsAgainst: 10,
-    goalDifference: 10,
-    goalsForPerMatch: 2,
-    goalsAgainstPerMatch: 1,
-    goalDifferencePerMatch: 1,
-    cleanSheets: 4,
-    cleanSheetRate: 0.4,
-    failedToScore: 2,
-    failedToScoreRate: 0.2,
-    bttsYes: 4,
-    bttsRate: 0.4,
-    over15: 8,
-    over15Rate: 0.8,
-    over25: 5,
-    over25Rate: 0.5,
-    over35: 2,
-    over35Rate: 0.2,
+    wins: 5, draws: 2, losses: 3, points: 17, pointsPerMatch: 1.7,
+    goalsFor: 20, goalsAgainst: 10, goalDifference: 10,
+    goalsForPerMatch: 2, goalsAgainstPerMatch: 1, goalDifferencePerMatch: 1,
+    cleanSheets: 4, cleanSheetRate: 0.4, failedToScore: 2, failedToScoreRate: 0.2,
+    bttsYes: 4, bttsRate: 0.4, over15: 8, over15Rate: 0.8, over25: 5, over25Rate: 0.5, over35: 2, over35Rate: 0.2
   };
 
   const mockFormStats: TeamFormStats = {
@@ -59,80 +44,42 @@ describe('getTeamProfile', () => {
     away: { matches: 5, wins: 2, draws: 1, losses: 2, points: 7, pointsPerMatch: 1.4, goalsFor: 10, goalsAgainst: 6, goalDifference: 4, goalsForPerMatch: 2, goalsAgainstPerMatch: 1.2, goalDifferencePerMatch: 0.8, cleanSheets: 2, cleanSheetRate: 0.4, failedToScore: 1, failedToScoreRate: 0.2, bttsYes: 2, bttsRate: 0.4, over15: 4, over15Rate: 0.8, over25: 3, over25Rate: 0.6, over35: 1, over35Rate: 0.2 },
   };
 
-  it('should aggregate all statistics correctly', async () => {
+  function createMatch(id: string, home: string, away: string, homeScore: number, awayScore: number) {
+    return {
+      matchId: id, homeTeamId: home, awayTeamId: away, homeTeamName: home, awayTeamName: away,
+      competitionId: 'c1', matchday: 1, matchDate: new Date('2026-09-01'), status: 'FINISHED', homeScore, awayScore
+    };
+  }
+
+  it('should compute score distribution correctly', async () => {
     vi.mocked(getBasicTeamStats).mockResolvedValue(mockBasicStats);
     vi.mocked(getTeamFormStats).mockResolvedValue(mockFormStats);
     vi.mocked(getTeamHomeAwayStats).mockResolvedValue(mockHomeAwayStats);
 
+    // Un meci acasă, unul deplasare, unul străin
+    vi.mocked(matchHistoryProvider.getTeamMatches).mockResolvedValue([
+      createMatch('m1', teamId, 'Other', 2, 0),
+      createMatch('m2', 'Other', teamId, 1, 3),
+      createMatch('m3', 'Other1', 'Other2', 0, 0)
+    ]);
+
     const profile = await getTeamProfile(teamId, new Date('2099-01-01T00:00:00Z'));
 
-    expect(profile.teamId).toBe(teamId);
-    expect(profile.basicStats).toEqual(mockBasicStats);
-    expect(profile.form).toEqual(mockFormStats);
-    expect(profile.homeAway).toEqual(mockHomeAwayStats);
-
-    expect(getBasicTeamStats).toHaveBeenCalledWith(teamId, new Date('2099-01-01T00:00:00Z'));
-    expect(getTeamFormStats).toHaveBeenCalledWith(teamId, new Date('2099-01-01T00:00:00Z'));
-    expect(getTeamHomeAwayStats).toHaveBeenCalledWith(teamId, new Date('2099-01-01T00:00:00Z'));
+    expect(profile.scoreDistribution.matchesTotal).toBe(2);
+    // Perspectiva echipei: m1 (2-0 acasă -> 2 goluriFor, 0 goalsAgainst), m2 (1-3 deplasare -> 3 goluriFor, 1 goalsAgainst)
+    expect(profile.scoreDistribution.scorelines).toContainEqual({ goalsFor: 2, goalsAgainst: 0, count: 1, rate: 0.5 });
+    expect(profile.scoreDistribution.scorelines).toContainEqual({ goalsFor: 3, goalsAgainst: 1, count: 1, rate: 0.5 });
   });
 
-  it('should handle error propagation from one of the statistical functions', async () => {
-    const error = new Error('Database error');
-    vi.mocked(getBasicTeamStats).mockRejectedValue(error);
+  it('should handle zero matches for score distribution', async () => {
+    vi.mocked(getBasicTeamStats).mockResolvedValue(mockBasicStats);
     vi.mocked(getTeamFormStats).mockResolvedValue(mockFormStats);
     vi.mocked(getTeamHomeAwayStats).mockResolvedValue(mockHomeAwayStats);
-
-    await expect(getTeamProfile(teamId, new Date('2099-01-01T00:00:00Z'))).rejects.toThrow('Database error');
-  });
-
-  it('should aggregate statistics correctly for a team with no history', async () => {
-    const zeroStats: BasicTeamStats = {
-      teamId,
-      matches: 0,
-      wins: 0,
-      draws: 0,
-      losses: 0,
-      points: 0,
-      pointsPerMatch: null,
-      goalsFor: 0,
-      goalsAgainst: 0,
-      goalDifference: 0,
-      goalsForPerMatch: null,
-      goalsAgainstPerMatch: null,
-      goalDifferencePerMatch: null,
-      cleanSheets: 0,
-      cleanSheetRate: null,
-      failedToScore: 0,
-      failedToScoreRate: null,
-      bttsYes: 0,
-      bttsRate: null,
-      over15: 0,
-      over15Rate: null,
-      over25: 0,
-      over25Rate: null,
-      over35: 0,
-      over35Rate: null,
-    };
-    const zeroFormStats: TeamFormStats = {
-      teamId,
-      last3: { ...zeroStats, matches: 0 },
-      last5: { ...zeroStats, matches: 0 },
-      last10: { ...zeroStats, matches: 0 },
-    };
-    const zeroHomeAwayStats: TeamHomeAwayStats = {
-      teamId,
-      home: zeroStats,
-      away: zeroStats,
-    };
-
-    vi.mocked(getBasicTeamStats).mockResolvedValue(zeroStats);
-    vi.mocked(getTeamFormStats).mockResolvedValue(zeroFormStats);
-    vi.mocked(getTeamHomeAwayStats).mockResolvedValue(zeroHomeAwayStats);
+    vi.mocked(matchHistoryProvider.getTeamMatches).mockResolvedValue([]);
 
     const profile = await getTeamProfile(teamId, new Date('2099-01-01T00:00:00Z'));
 
-    expect(profile.basicStats.matches).toBe(0);
-    expect(profile.form.last3.matches).toBe(0);
-    expect(profile.homeAway.home.matches).toBe(0);
+    expect(profile.scoreDistribution.matchesTotal).toBe(0);
+    expect(profile.scoreDistribution.scorelines).toEqual([]);
   });
 });

@@ -14,13 +14,20 @@ export async function getH2HStats(
 
   const allMatches = await matchHistoryProvider.getHeadToHead(teamAId, teamBId, asOf);
 
-  // Filter eligible matches: FINISHED and both scores not null
+  // Filter eligible matches: FINISHED, both scores not null, and strictly before asOf
   const eligibleMatches = allMatches.filter(
     (match) =>
       match.status === 'FINISHED' &&
       match.homeScore !== null &&
       match.awayScore !== null &&
       match.matchDate < asOf
+  );
+
+  // Further filter to only include matches that actually involve both teams (H2H)
+  const h2hEligibleMatches = eligibleMatches.filter(
+    (match) =>
+      (match.homeTeamId === teamAId && match.awayTeamId === teamBId) ||
+      (match.homeTeamId === teamBId && match.awayTeamId === teamAId)
   );
 
   // Initialize counters
@@ -31,26 +38,11 @@ export async function getH2HStats(
   let teamAGoals = 0;
   let teamBGoals = 0;
 
-  for (const match of eligibleMatches) {
-    // Team isolation protection: ensure the match actually contains both teams.
-    // The provider should already guarantee this, but we verify defensively.
-    const isValidH2HMatch =
-      (match.homeTeamId === teamAId && match.awayTeamId === teamBId) ||
-      (match.homeTeamId === teamBId && match.awayTeamId === teamAId);
-
-    if (!isValidH2HMatch) {
-      continue;
-    }
-
+  for (const match of h2hEligibleMatches) {
     // Determine goals from the perspective of Team A / Team B.
     const isTeamAHome = match.homeTeamId === teamAId;
     const teamAGoalsForThisMatch = isTeamAHome ? match.homeScore : match.awayScore;
     const teamBGoalsForThisMatch = isTeamAHome ? match.awayScore : match.homeScore;
-
-    if (teamAGoalsForThisMatch === undefined || teamAGoalsForThisMatch === null || 
-        teamBGoalsForThisMatch === undefined || teamBGoalsForThisMatch === null) {
-      continue;
-    }
 
     // Update goals
     teamAGoals += teamAGoalsForThisMatch;
@@ -76,9 +68,9 @@ export async function getH2HStats(
   const teamBWinRate = matches > 0 ? teamBWins / matches : null;
   const averageTotalGoals = matches > 0 ? (teamAGoals + teamBGoals) / matches : null;
 
-  // Calculate score distribution only for eligible H2H matches
+  // Calculate score distribution only for eligible H2H matches (same list used for counters)
   const scoreDistribution = calculateScoreDistribution(
-    eligibleMatches.map((match) => {
+    h2hEligibleMatches.map((match) => {
       const isTeamAHome = match.homeTeamId === teamAId;
       return {
         goalsFor: isTeamAHome ? match.homeScore : match.awayScore,
