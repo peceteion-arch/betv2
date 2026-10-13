@@ -102,6 +102,8 @@ function isMatchEligible(m: NormalizedMatch, asOf: Date): boolean {
     m.status === 'FINISHED' &&
     m.homeScore !== null &&
     m.awayScore !== null &&
+    Number.isFinite(m.homeScore) &&
+    Number.isFinite(m.awayScore) &&
     m.homeScore >= 0 &&
     m.awayScore >= 0 &&
     m.matchDate < asOf
