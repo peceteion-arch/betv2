@@ -14,20 +14,20 @@ export async function getExpectedGoals(
   asOf: Date,
   competitionId: string
 ): Promise<ExpectedGoalsResult> {
-  // 1. Obținem toate meciurile competiției pentru baseline
+  // 1. Obținem meciurile competiției pentru baseline (strict pe competitionId)
   const competitionMatches = await matchHistoryProvider.getCompetitionMatches(competitionId, asOf);
-  const eligibleCompMatches = competitionMatches.filter(m => isEligible(m, competitionId));
+  const eligibleCompMatches = competitionMatches.filter(m => isMatchEligible(m));
 
-  // 2. Obținem meciurile echipelor (filtrate strict pe competitionId și teren)
+  // 2. Obținem istoricul GLOBAL al echipelor (din toate competițiile)
   const homeTeamMatches = await matchHistoryProvider.getTeamMatches(homeTeamId, asOf);
   const awayTeamMatches = await matchHistoryProvider.getTeamMatches(awayTeamId, asOf);
 
-  // 3. Statistici echipe (Home -> acasă, Away -> deplasare), filtrate pe competitionId
+  // 3. Statistici echipe (Home -> acasă, Away -> deplasare) - ISTORIC GLOBAL
   const homeEligible = homeTeamMatches.filter(m =>
-    isEligible(m, competitionId) && m.homeTeamId === homeTeamId
+    isMatchEligible(m) && m.homeTeamId === homeTeamId
   );
   const awayEligible = awayTeamMatches.filter(m =>
-    isEligible(m, competitionId) && m.awayTeamId === awayTeamId
+    isMatchEligible(m) && m.awayTeamId === awayTeamId
   );
 
   // 4. Calculăm baseline-ul competiției
@@ -47,7 +47,6 @@ export async function getExpectedGoals(
   const compHomeGoalsAvg = compHomeGFSum / eligibleCompMatches.length;
   const compAwayGoalsAvg = compAwayGFSum / eligibleCompMatches.length;
 
-  // Dacă mediile de competiție sunt zero, nu putem normaliza
   if (compHomeGoalsAvg === 0 || compAwayGoalsAvg === 0) {
     return {
       home: { teamId: homeTeamId, lambdaHome: null, matchesUsed: homeEligible.length },
@@ -55,7 +54,7 @@ export async function getExpectedGoals(
     };
   }
 
-  // 5. Calculăm mediile echipelor (HomeTeam acasă, AwayTeam deplasare)
+  // 5. Calculăm mediile echipelor (Istoric Global)
   let homeTeamHomeGF = 0;
   let homeTeamHomeGA = 0;
   for (const m of homeEligible) {
@@ -89,13 +88,13 @@ export async function getExpectedGoals(
   };
 }
 
-function isEligible(m: NormalizedMatch, competitionId: string): boolean {
+// Validare generică pentru meci eligibil (fără filtru de competiție aici)
+function isMatchEligible(m: NormalizedMatch): boolean {
   return (
     m.status === 'FINISHED' &&
     m.homeScore !== null &&
     m.awayScore !== null &&
     m.homeScore >= 0 &&
-    m.awayScore >= 0 &&
-    m.competitionId === competitionId
+    m.awayScore >= 0
   );
 }
