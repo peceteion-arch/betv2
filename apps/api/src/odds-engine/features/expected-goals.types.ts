@@ -1,11 +1,12 @@
-export interface ExpectedGoals {
-  teamId: string;
-  expectedGoalsFor: number | null;
-  expectedGoalsAgainst: number | null;
-  matchesUsed: number;
-}
-
 export interface ExpectedGoalsResult {
-  home: ExpectedGoals;
-  away: ExpectedGoals;
+  home: {
+    teamId: string;
+    lambdaHome: number | null;
+    matchesUsed: number;
+  };
+  away: {
+    teamId: string;
+    lambdaAway: number | null;
+    matchesUsed: number;
+  };
 }
