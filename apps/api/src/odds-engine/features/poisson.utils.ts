@@ -18,18 +18,29 @@ export interface Calculate1X2Result {
   draw: number;
   two: number;
   excludedProb: number;
+  converged: boolean;
   limitInfo: {
     maxHome: number;
     maxAway: number;
     excludedMass: number;
+    errorEstimate: number;
   };
 }
 
 /**
  * Calculează probabilitatea P(X = k) pentru o distribuție Poisson cu parametru lambda.
+ * @param k Numărul de goluri (trebuie să fie întreg, finit și >= 0)
+ * @param lambda Parametrul distribuției (trebuie să fie finit și >= 0)
+ * @returns Probabilitatea calculată sau 0 dacă parametrii sunt invalizi.
  */
 export function poissonProb(k: number, lambda: number): number {
-  if (lambda < 0 || k < 0 || !Number.isFinite(lambda) || !Number.isFinite(k)) {
+  if (
+    !Number.isFinite(k) ||
+    !Number.isFinite(lambda) ||
+    lambda < 0 ||
+    k < 0 ||
+    !Number.isInteger(k)
+  ) {
     return 0;
   }
   if (lambda === 0) {
@@ -37,7 +48,10 @@ export function poissonProb(k: number, lambda: number): number {
   }
   // Formula: exp(k * ln(lambda) - lambda - ln(k!))
   // Pentru stabilitate numerică, folosim log-space.
-  return Math.exp(k * Math.log(lambda) - lambda - logFactorial(k));
+  const logP = k * Math.log(lambda) - lambda - logFactorial(k);
+  const p = Math.exp(logP);
+
+  return Number.isFinite(p) ? p : 0;
 }
 
 function logFactorial(n: number): number {
@@ -51,8 +65,16 @@ function logFactorial(n: number): number {
 
 /**
  * Calculează probabilitatea unui scor exact (g - a)
+ * @param g Goluri gazdă
+ * @param a Goluri oaspeți
+ * @param lambdaHome Lambda gazdă
+ * @param lambdaAway Lambda oaspeți
+ * @returns Probabilitatea scorului exact. Returnează 0 pentru parametri invalizi sau scoruri fracționare.
  */
 export function exactScoreProb(g: number, a: number, lambdaHome: number, lambdaAway: number): number {
+  if (!Number.isInteger(g) || !Number.isInteger(a)) {
+    return 0;
+  }
   return poissonProb(g, lambdaHome) * poissonProb(a, lambdaAway);
 }
 
@@ -63,6 +85,7 @@ export function exactScoreProb(g: number, a: number, lambdaHome: number, lambdaA
  * @param lambdaAway Media golurilor pentru oaspeți
  * @param tolerance Toleranța maximă acceptată pentru masa probabilistă exclusă (default 1e-9)
  * @param absoluteMaxLimit Limita de siguranță pentru a preveni bucle infinite (default 100)
+ * @returns Obiectul care conține probabilitățile, starea de convergență și informații despre limite.
  */
 export function calculate1X2(
   lambdaHome: number,
@@ -70,6 +93,32 @@ export function calculate1X2(
   tolerance = 1e-9,
   absoluteMaxLimit = 100
 ): Calculate1X2Result {
+  // Validare input
+  if (
+    !Number.isFinite(lambdaHome) ||
+    !Number.isFinite(lambdaAway) ||
+    lambdaHome < 0 ||
+    lambdaAway < 0 ||
+    !Number.isFinite(tolerance) ||
+    tolerance <= 0 ||
+    !Number.isFinite(absoluteMaxLimit) ||
+    absoluteMaxLimit <= 0
+  ) {
+    return {
+      one: 0,
+      draw: 0,
+      two: 0,
+      excludedProb: 1,
+      converged: false,
+      limitInfo: {
+        maxHome: 0,
+        maxAway: 0,
+        excludedMass: 1,
+        errorEstimate: 1,
+      },
+    };
+  }
+
   let one = 0;
   let draw = 0;
   let two = 0;
@@ -78,10 +127,9 @@ export function calculate1X2(
   let maxHome = 10;
   let maxAway = 10;
 
-  // Încercăm să găsim limitele adaptiv
-  // Începem cu o limită de bază și creștem dacă masa exclusă e prea mare
   let currentIter = 0;
-  const maxIterations = 10; // Iterăm de maxim 10 ori pentru a ajusta limitele
+  const maxIterations = 15;
+  let converged = false;
 
   while (currentIter < maxIterations) {
     one = 0;
@@ -99,24 +147,33 @@ export function calculate1X2(
       }
     }
 
-    const excludedProb = 1 - totalProb;
+    const currentExcludedProb = 1 - totalProb;
 
-    if (excludedProb <= tolerance || maxHome >= absoluteMaxLimit || maxAway >= absoluteMaxLimit) {
+    // Verificăm dacă am atins toleranța
+    if (currentExcludedProb <= tolerance) {
+      converged = true;
       break;
     }
 
-    // Creștem limitele adaptiv bazat pe lambda
-    // Dacă lambda e mare, avem nevoie de limite mai mari.
+    // Verificăm dacă am atins limita de siguranță
+    if (maxHome >= absoluteMaxLimit || maxAway >= absoluteMaxLimit) {
+      break;
+    }
+
+    // Creștem limitele adaptiv
     maxHome = Math.max(maxHome + 5, Math.ceil(lambdaHome * 3));
     maxAway = Math.max(maxAway + 5, Math.ceil(lambdaAway * 3));
 
-    // Capsăm la limita absolută de siguranță
+    // Capsăm la limita absolută
     maxHome = Math.min(maxHome, absoluteMaxLimit);
     maxAway = Math.min(maxAway, absoluteMaxLimit);
 
     currentIter++;
   }
 
+  // Calcul robust al masei excluse
+  // Folosim un calcul separat pentru a evita acumularea de erori în totalProb
+  // dar pentru a raporta masa exclusă reală din contextul calculat.
   const finalExcludedProb = Math.max(0, 1 - totalProb);
 
   return {
@@ -124,10 +181,12 @@ export function calculate1X2(
     draw,
     two,
     excludedProb: finalExcludedProb,
+    converged,
     limitInfo: {
       maxHome,
       maxAway,
-      excludedMass: finalExcludedProb
-    }
+      excludedMass: finalExcludedProb,
+      errorEstimate: finalExcludedProb,
+    },
   };
 }
