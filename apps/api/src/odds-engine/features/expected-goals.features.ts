@@ -14,13 +14,13 @@ export async function getExpectedGoals(
   asOf: Date,
   competitionId: string
 ): Promise<ExpectedGoalsResult> {
-  // 1. Baseline competiție - meciuri strict din competiția curentă
+  // 1. Obținem meciurile competiției pentru baseline (strict pe competitionId)
   const competitionMatches = await matchHistoryProvider.getCompetitionMatches(competitionId, asOf);
   const eligibleCompMatches = competitionMatches.filter(m =>
     isMatchEligible(m, asOf) && m.competitionId === competitionId
   );
 
-  // 2. Istoric global echipe - meciuri din toate competițiile
+  // 2. Obținem istoricul GLOBAL al echipelor (din toate competițiile)
   const homeTeamMatches = await matchHistoryProvider.getTeamMatches(homeTeamId, asOf);
   const awayTeamMatches = await matchHistoryProvider.getTeamMatches(awayTeamId, asOf);
 
@@ -32,33 +32,22 @@ export async function getExpectedGoals(
     isMatchEligible(m, asOf) && m.awayTeamId === awayTeamId
   );
 
-  // 4. Calcul baseline competiție
-  if (eligibleCompMatches.length === 0) {
-    return {
-      home: { teamId: homeTeamId, lambdaHome: null, matchesUsed: homeEligible.length },
-      away: { teamId: awayTeamId, lambdaAway: null, matchesUsed: awayEligible.length }
-    };
-  }
+  // 4. Calculăm baseline-ul competiției (independente pentru fiecare lambda)
+  let compHomeGoalsAvg: number | null = null;
+  let compAwayGoalsAvg: number | null = null;
 
-  let compHomeGFSum = 0;
-  let compAwayGFSum = 0;
-  for (const m of eligibleCompMatches) {
-    compHomeGFSum += m.homeScore!;
-    compAwayGFSum += m.awayScore!;
-  }
-  const compHomeGoalsAvg = compHomeGFSum / eligibleCompMatches.length;
-  const compAwayGoalsAvg = compAwayGFSum / eligibleCompMatches.length;
-
-  // Dacă mediile baseline sunt zero, nu putem normaliza
-  if (compHomeGoalsAvg === 0 || compAwayGoalsAvg === 0) {
-    return {
-      home: { teamId: homeTeamId, lambdaHome: null, matchesUsed: homeEligible.length },
-      away: { teamId: awayTeamId, lambdaAway: null, matchesUsed: awayEligible.length }
-    };
+  if (eligibleCompMatches.length > 0) {
+    let compHomeGFSum = 0;
+    let compAwayGFSum = 0;
+    for (const m of eligibleCompMatches) {
+      compHomeGFSum += m.homeScore!;
+      compAwayGFSum += m.awayScore!;
+    }
+    compHomeGoalsAvg = compHomeGFSum / eligibleCompMatches.length;
+    compAwayGoalsAvg = compAwayGFSum / eligibleCompMatches.length;
   }
 
   // 5. Statistici echipe (Istoric Global)
-  // Media gazdei acasă
   let homeTeamHomeGF = 0;
   let homeTeamHomeGA = 0;
   for (const m of homeEligible) {
@@ -68,7 +57,6 @@ export async function getExpectedGoals(
   const hthGFAvg = homeEligible.length > 0 ? homeTeamHomeGF / homeEligible.length : null;
   const hthGAAvg = homeEligible.length > 0 ? homeTeamHomeGA / homeEligible.length : null;
 
-  // Media oaspetelui în deplasare
   let awayTeamAwayGF = 0;
   let awayTeamAwayGA = 0;
   for (const m of awayEligible) {
@@ -78,14 +66,17 @@ export async function getExpectedGoals(
   const ataGFAvg = awayEligible.length > 0 ? awayTeamAwayGF / awayEligible.length : null;
   const ataGAAvg = awayEligible.length > 0 ? awayTeamAwayGA / awayEligible.length : null;
 
-  // 6. Calcul Final λ conform formulei
-  const lambdaHome = (hthGFAvg !== null && ataGAAvg !== null)
-    ? (hthGFAvg * ataGAAvg) / compHomeGoalsAvg
-    : null;
+  // 6. Calcul Final λ conform formulei (independent)
+  const calculateLambda = (forAvg: number | null, againstAvg: number | null, compAvg: number | null) => {
+    if (forAvg === null || againstAvg === null || compAvg === null || compAvg <= 0 || !Number.isFinite(compAvg)) {
+      return null;
+    }
+    const lambda = (forAvg * againstAvg) / compAvg;
+    return Number.isFinite(lambda) && lambda >= 0 ? lambda : null;
+  };
 
-  const lambdaAway = (ataGFAvg !== null && hthGAAvg !== null)
-    ? (ataGFAvg * hthGAAvg) / compAwayGoalsAvg
-    : null;
+  const lambdaHome = calculateLambda(hthGFAvg, ataGAAvg, compHomeGoalsAvg);
+  const lambdaAway = calculateLambda(ataGFAvg, hthGAAvg, compAwayGoalsAvg);
 
   return {
     home: { teamId: homeTeamId, lambdaHome, matchesUsed: homeEligible.length },
