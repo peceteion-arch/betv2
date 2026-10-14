@@ -4,7 +4,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    include: ['tests/**/*.test.ts'],
+    include: ['tests/**/*.test.ts', 'src/odds-engine/features/**/*.test.ts', 'src/odds-engine/features/__tests__/*.test.ts'],
     // config/env.ts throws on startup when these are missing, so the test run
     // needs throwaway values. These are never used to sign or verify anything.
     env: {

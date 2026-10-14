@@ -90,7 +90,7 @@ describe('Expected Goals - PASUL 1.5B.2 audit si corectare', () => {
 
   it('nu permite meciuri viitoare sau nefinalizate sa influenteze', async () => {
     const allMatches = [
-      makeMatch({ matchId: 'past', status: 'FINISHED', homeScore: 2, awayScore: 1, matchDate: new Date('2025-05-01') }),
+      makeMatch({ matchId: 'past', status: 'FINISHED', homeTeamId: 'tA', awayTeamId: 'tB', homeScore: 2, awayScore: 1, matchDate: new Date('2025-05-01') }),
       makeMatch({ matchId: 'live', status: 'LIVE', homeScore: 2, awayScore: 1, matchDate: new Date('2025-05-05') }),
       makeMatch({ matchId: 'scheduled', status: 'SCHEDULED', homeScore: null, awayScore: null, matchDate: new Date('2025-05-08') }),
       makeMatch({ matchId: 'future', status: 'FINISHED', homeScore: 10, awayScore: 10, matchDate: new Date('2025-06-15') }),
