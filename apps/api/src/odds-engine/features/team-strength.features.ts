@@ -8,7 +8,7 @@
  *   - F_norm = puncte din ultimele 3 / (3*3), cu default 0.5 daca <3 meciuri (nu dubleaza global)
  *   - Formă separată de acumulat: F este doar din fereastra ultimelor 3, nu din total.
  *   - Adj_adv = 1 (neimplementat real din cauza lipsei ratingului opponent pre-calculat fără circularitate)
- *   rawGeneral = 0.35*P_norm + 0.20*GD_norm + 0.25*F_norm + 0.20*0  (fara dublare informatica)
+ *   rawGeneral = 0.40*P_norm + 0.30*GD_norm + 0.30*F_norm  (ponderi complete, fara componenta fictiva)
  *   Scalat la 0..10 fara fortare artificiala: valorile 0..1 corespund direct, limitele sunt explicite.
  *
  * Atac (0..10):
@@ -72,13 +72,14 @@ export async function getTeamStrength(teamId: string, asOf: Date): Promise<TeamS
     : 0.5; // default neutru cand <3 (nu 0, pentru a evita distorsionare);
            // dar form final = null daca N < 3, deci acest default nu afecteaza output final direct
 
-  // 4. Ajustare adversari — BLINCA: nu implementata real din cauza arquiteturii.
-  //    Fara simulare cu constante. Contributia = 0 (niciun bonus/penalty pretins).
-  const Adj_adv_contribution = 0; // explicat: needs opponent pre-computation per m.matchDate
+  // 4. Ajustare adversari — NEIMPLEMENTAT real (blocaj arhitectural documentat).
+  //    Nu simulam cu constante; contributia = 0 pentru a nu pretinde calibrage.
+  const Adj_adv_contribution = 0;
 
-  // 5. Rating general — ponderi documentate, nu calibrate statistic
-  const rawGeneral01 = 0.35 * P_norm + 0.20 * GD_norm + 0.25 * F_norm + 0.20 * Adj_adv_contribution;
-  // Limitare explicita (nu fortare): daca >1, cap la 1; daca <0, la 0 (nu ar trebui cu termeni non-negativi)
+  // 5. Rating general — ponderi complete (suma 1.00), fara plafon accidental
+  const rawGeneral01 = 0.40 * P_norm + 0.30 * GD_norm + 0.30 * F_norm + 0.00 * Adj_adv_contribution;
+  // Limitare explicita (nu fortare artificiala): daca >1, cap la 1; daca <0, la 0.
+  // Cu ponderi 1.00 max este 1 (candest valore max ale termenilor); fara plafon la 0.8.
   const rawGeneralClamped = Math.max(0, Math.min(1, rawGeneral01));
   const rawGeneralScaled = rawGeneralClamped * 10; // 0..10 direct
 
