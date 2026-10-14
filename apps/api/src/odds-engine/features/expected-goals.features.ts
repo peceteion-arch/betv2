@@ -5,9 +5,9 @@ import { isMatchEligible } from './match-eligibility.utils';
 
 /**
  * Calculează golurile așteptate (xG) normalizate pentru gazde și oaspeți.
- * Formula:
- * lambdaHome = (homeTeamHomeGoalsForAvg * awayTeamAwayGoalsAgainstAvg) / competitionHomeGoalsAvg
- * lambdaAway = (awayTeamAwayGoalsForAvg * homeTeamHomeGoalsAgainstAvg) / competitionAwayGoalsAvg
+ * Formula convenită (PASUL 1.7):
+ * lambdaHome = competitionHomeGoalsAvg * (homeTeamHomeGFAvg / globalHomeGoalsAvg) * (awayTeamAwayGAAvg / globalHomeGoalsAvg)
+ * lambdaAway = competitionAwayGoalsAvg * (awayTeamAwayGFAvg / globalAwayGoalsAvg) * (homeTeamHomeGAAvg / globalAwayGoalsAvg)
  */
 export async function getExpectedGoals(
   homeTeamId: string,
@@ -33,7 +33,7 @@ export async function getExpectedGoals(
     isMatchEligible(m, asOf) && m.awayTeamId === awayTeamId
   );
 
-  const globalMatches = await matchHistoryProvider.getGlobalMatches?.(asOf) ?? [];
+  const globalMatches = await matchHistoryProvider.getGlobalMatches(asOf);
 
   // 4. Calculăm baseline-ul competiției (independente pentru fiecare lambda)
   let compHomeGoalsAvg: number | null = null;

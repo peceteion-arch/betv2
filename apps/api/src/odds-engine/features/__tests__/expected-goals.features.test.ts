@@ -44,6 +44,7 @@ describe('Expected Goals - PASUL 1.5B.2 audit si corectare', () => {
       makeMatch({ matchId: 'a1', homeTeamId: 'tY', awayTeamId: 'tB', homeScore: 1, awayScore: 2, matchDate: new Date('2025-05-01') }),
     ];
     vi.mocked(matchHistoryProvider.getCompetitionMatches).mockResolvedValue(compMatches);
+    vi.mocked(matchHistoryProvider.getGlobalMatches).mockResolvedValue([...compMatches, ...homeMatches, ...awayMatches]);
     vi.mocked(matchHistoryProvider.getTeamMatches).mockImplementation(async (id: string) => {
       if (id === 'tA') return homeMatches;
       if (id === 'tB') return awayMatches;
@@ -65,6 +66,7 @@ describe('Expected Goals - PASUL 1.5B.2 audit si corectare', () => {
     ];
     vi.mocked(matchHistoryProvider.getCompetitionMatches).mockResolvedValue(compMatches);
     vi.mocked(matchHistoryProvider.getTeamMatches).mockResolvedValue([]);
+    vi.mocked(matchHistoryProvider.getGlobalMatches).mockResolvedValue([]);
     const res = await getExpectedGoals('tA', 'tB', new Date('2025-06-10'), 'c1');
     expect(res.home.lambdaHome).toBeNull();
   });
@@ -72,6 +74,7 @@ describe('Expected Goals - PASUL 1.5B.2 audit si corectare', () => {
   it('returneaza null cand lipseste istoricul echipei sau media competitiei', async () => {
     vi.mocked(matchHistoryProvider.getCompetitionMatches).mockResolvedValue([]);
     vi.mocked(matchHistoryProvider.getTeamMatches).mockResolvedValue([]);
+    vi.mocked(matchHistoryProvider.getGlobalMatches).mockResolvedValue([]);
     const res = await getExpectedGoals('tA', 'tB', new Date('2025-06-10'), 'c1');
     expect(res.home.lambdaHome).toBeNull();
     expect(res.away.lambdaAway).toBeNull();
@@ -85,6 +88,7 @@ describe('Expected Goals - PASUL 1.5B.2 audit si corectare', () => {
     ];
     vi.mocked(matchHistoryProvider.getCompetitionMatches).mockResolvedValue(compMatches);
     vi.mocked(matchHistoryProvider.getTeamMatches).mockResolvedValue([]);
+    vi.mocked(matchHistoryProvider.getGlobalMatches).mockResolvedValue([]);
     const res = await getExpectedGoals('tA', 'tB', new Date('2025-06-10'), 'c1');
     expect(res.home.lambdaHome).toBeNull();
   });
@@ -98,6 +102,7 @@ describe('Expected Goals - PASUL 1.5B.2 audit si corectare', () => {
     ];
     vi.mocked(matchHistoryProvider.getTeamMatches).mockImplementation(async (id: string) => allMatches);
     vi.mocked(matchHistoryProvider.getCompetitionMatches).mockResolvedValue(allMatches.filter(m => m.matchId === 'past'));
+    vi.mocked(matchHistoryProvider.getGlobalMatches).mockResolvedValue(allMatches.filter(m => m.status === 'FINISHED' && m.matchDate < new Date('2025-06-10')));
     const res = await getExpectedGoals('tA', 'tB', new Date('2025-06-10'), 'c1');
     expect(res.home.matchesUsed).toBe(1);
   });
@@ -117,10 +122,40 @@ describe('Expected Goals - PASUL 1.5B.2 audit si corectare', () => {
       if (compId === 'low') return lowComp;
       return highComp;
     });
+    vi.mocked(matchHistoryProvider.getGlobalMatches).mockImplementation(async () => [
+      ...lowComp,
+      ...highComp,
+      ...teamMatches,
+    ]);
     const resLow = await getExpectedGoals('tA', 'tB', new Date('2025-06-10'), 'low');
     const resHigh = await getExpectedGoals('tA', 'tB', new Date('2025-06-10'), 'high');
     expect(resLow.home.lambdaHome).toBeGreaterThanOrEqual(0);
     expect(resHigh.home.lambdaHome).toBeGreaterThanOrEqual(0);
+
+  });
+  it('returneaza null cand media globala a gazdelor este zero (global present, scori zero)', async () => {
+    const globalMatches = [
+      makeMatch({ matchId: 'g0', competitionId: 'cX', homeTeamId: 'x', awayTeamId: 'y', homeScore: 0, awayScore: 2, matchDate: new Date('2025-05-01'), status: 'FINISHED' }),
+    ];
+    const compMatches = [
+      makeMatch({ matchId: 'c1', competitionId: 'c1', homeTeamId: 'tA', awayTeamId: 'tB', homeScore: 1, awayScore: 0, matchDate: new Date('2025-05-03'), status: 'FINISHED' }),
+    ];
+    const homeMatches = [
+      makeMatch({ matchId: 'h1', homeTeamId: 'tA', awayTeamId: 'tX', homeScore: 1, awayScore: 0, matchDate: new Date('2025-05-01'), status: 'FINISHED' }),
+    ];
+    const awayMatches = [
+      makeMatch({ matchId: 'a1', homeTeamId: 'tY', awayTeamId: 'tB', homeScore: 2, awayScore: 3, matchDate: new Date('2025-05-01'), competitionId: 'c1', status: 'FINISHED' }),
+    ];
+    vi.mocked(matchHistoryProvider.getGlobalMatches).mockResolvedValue(globalMatches);
+    vi.mocked(matchHistoryProvider.getCompetitionMatches).mockResolvedValue(compMatches);
+    vi.mocked(matchHistoryProvider.getTeamMatches).mockImplementation(async (id: string) => {
+      if (id === 'tA') return homeMatches;
+      if (id === 'tB') return awayMatches;
+      return [];
+    });
+    const res = await getExpectedGoals('tA', 'tB', new Date('2025-06-10'), 'c1');
+    expect(res.home.lambdaHome).toBeNull();
+    expect(res.away.lambdaAway).toBeNull();
   });
 });
 
@@ -156,10 +191,10 @@ describe('Expected Goals - PASUL 1.7 formula convenita', () => {
     });
     const res = await getExpectedGoals('tA', 'tB', new Date('2025-06-10'), 'c1');
     // hthGFAvg = 4; ataGAAvg = 2; compHomeGoalsAvg = 2; globalHomeGoalsAvg = 2
-    // lambdaHome = 2 * (4/2) * (2/2) = 2 * 2 * 1 = 4
+    // lambdaHome = 2 * (4/2) * (2/2) = 4
     expect(res.home.lambdaHome).toBeCloseTo(4, 10);
     // ataGFAvg = 3; hthGAAvg = 1; compAwayGoalsAvg = 1; globalAwayGoalsAvg = 1.5
-    // lambdaAway = 1 * (3/1.5) * (1/1.5) = 1 * 2 * 0.666... = 1.333...
+    // lambdaAway = 1 * (3/1.5) * (1/1.5) = 1.333...
     expect(res.away.lambdaAway).toBeCloseTo(4 / 3, 10);
     expect(res.home.matchesUsed).toBe(1);
     expect(res.away.matchesUsed).toBe(1);
@@ -169,6 +204,31 @@ describe('Expected Goals - PASUL 1.7 formula convenita', () => {
     vi.mocked(matchHistoryProvider.getGlobalMatches).mockResolvedValue([]);
     vi.mocked(matchHistoryProvider.getCompetitionMatches).mockResolvedValue([makeMatch({ matchId: 'c1', competitionId: 'c1', homeTeamId: 'tA', awayTeamId: 'tB', homeScore: 2, awayScore: 1, matchDate: new Date('2025-05-01'), status: 'FINISHED' })]);
     vi.mocked(matchHistoryProvider.getTeamMatches).mockResolvedValue([]);
+    const res = await getExpectedGoals('tA', 'tB', new Date('2025-06-10'), 'c1');
+    expect(res.home.lambdaHome).toBeNull();
+    expect(res.away.lambdaAway).toBeNull();
+  });
+
+  it('returneaza null cand media globala a gazdelor este zero (global present, scori zero)', async () => {
+    const globalMatches = [
+      makeMatch({ matchId: 'g0', competitionId: 'cX', homeTeamId: 'x', awayTeamId: 'y', homeScore: 0, awayScore: 2, matchDate: new Date('2025-05-01'), status: 'FINISHED' }),
+    ];
+    const compMatches = [
+      makeMatch({ matchId: 'c1', competitionId: 'c1', homeTeamId: 'tA', awayTeamId: 'tB', homeScore: 1, awayScore: 0, matchDate: new Date('2025-05-03'), status: 'FINISHED' }),
+    ];
+    const homeMatches = [
+      makeMatch({ matchId: 'h1', homeTeamId: 'tA', awayTeamId: 'tX', homeScore: 1, awayScore: 0, matchDate: new Date('2025-05-01'), status: 'FINISHED' }),
+    ];
+    const awayMatches = [
+      makeMatch({ matchId: 'a1', homeTeamId: 'tY', awayTeamId: 'tB', homeScore: 2, awayScore: 3, matchDate: new Date('2025-05-01'), competitionId: 'c1', status: 'FINISHED' }),
+    ];
+    vi.mocked(matchHistoryProvider.getGlobalMatches).mockResolvedValue(globalMatches);
+    vi.mocked(matchHistoryProvider.getCompetitionMatches).mockResolvedValue(compMatches);
+    vi.mocked(matchHistoryProvider.getTeamMatches).mockImplementation(async (id: string) => {
+      if (id === 'tA') return homeMatches;
+      if (id === 'tB') return awayMatches;
+      return [];
+    });
     const res = await getExpectedGoals('tA', 'tB', new Date('2025-06-10'), 'c1');
     expect(res.home.lambdaHome).toBeNull();
     expect(res.away.lambdaAway).toBeNull();
