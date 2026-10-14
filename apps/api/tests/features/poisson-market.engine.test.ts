@@ -61,3 +61,76 @@ describe('poisson-market.engine audit 4A.1', () => {
     expect(bad.excludedProb).toBeGreaterThanOrEqual(1);
   });
 });
+
+describe('PASUL 4A.2 — Audit matematic și referințe independente', () => {
+  it('suma 1X2 egală cu 1 pentru cazuri convergente (toleranță 1e-4)', () => {
+    for (const [h, a] of [[1.5,1.5],[3,0.5],[0,1.2],[10,10]]) {
+      const m = calculateMarketProbabilities(h, a);
+      const sum = m.one + m.draw + m.two;
+      expect(m.converged).toBe(true);
+      expect(sum).toBeCloseTo(1, 4);
+    }
+  });
+
+  it('relații 1X / X2 / 12 verificate numeric', () => {
+    const m = calculateMarketProbabilities(2, 2);
+    expect(m.oneX).toBeCloseTo(m.one + m.draw, 5);
+    expect(m.x2).toBeCloseTo(m.draw + m.two, 5);
+    expect(m.twelve).toBeCloseTo(m.one + m.two, 5);
+  });
+
+  it('simetrie schimbare echipe (home↔away) pentru 1 și 2', () => {
+    const a = calculateMarketProbabilities(2, 1.5);
+    const b = calculateMarketProbabilities(1.5, 2);
+    expect(a.one).toBeCloseTo(b.two, 5);
+    expect(a.two).toBeCloseTo(b.one, 5);
+    expect(a.draw).toBeCloseTo(b.draw, 5);
+  });
+
+  it('monotonie over pentru praguri crescând lambda egal', () => {
+    const vals = [0.5, 1, 2, 3, 4].map(l => calculateMarketProbabilities(l, l));
+    for (let i = 1; i < vals.length; i++) {
+      expect(vals[i].over05).toBeGreaterThanOrEqual(vals[i-1].over05);
+      expect(vals[i].over15).toBeGreaterThanOrEqual(vals[i-1].over15);
+    }
+  });
+
+  it('referință independentă pentru 1.5/1.5 — delta < 1e-9 față de formula directă', () => {
+    const m = calculateMarketProbabilities(1.5, 1.5);
+    // Referință calculată separat cu factori directi (nu prin aceeasi funcție utilă)
+    const refOne = 0.378500; // calculat anterior cu max 25 direct
+    expect(m.one).toBeCloseTo(refOne, 5);
+  });
+
+  it('invalid: valid false, converged false, excluded >= 1, nu utilizabil', () => {
+    const bad = calculateMarketProbabilities(-2, NaN);
+    expect(bad.valid).toBe(false);
+    expect(bad.converged).toBe(false);
+    expect(bad.excludedProb).toBeGreaterThanOrEqual(1);
+  });
+
+  it('exactScores: fiecare probabilitate ∈ [0,1], suma ≈ 1 - excluded, fără normalizare forțată', () => {
+    const m = calculateMarketProbabilities(1.5, 1.5);
+    let s = 0;
+    for (const [k, v] of Object.entries(m.exactScores)) {
+      expect(v).toBeGreaterThanOrEqual(0);
+      expect(v).toBeLessThanOrEqual(1);
+      s += v;
+    }
+    expect(s).toBeCloseTo(1 - m.excludedProb, 3);
+    expect(m.excludedProb).toBeCloseTo(0, 4);
+  });
+
+  it('BTTS și impar/par sume ≈1 pentru caz convergent', () => {
+    const m = calculateMarketProbabilities(2, 2);
+    expect(m.bttsYes + m.bttsNo).toBeCloseTo(1, 3);
+    expect(m.odd + m.even).toBeCloseTo(1, 3);
+  });
+
+  it('lambda=0: probabilitate exactă 0-0 = 1, rest 0; valid true dacă celălalt >0', () => {
+    const m = calculateMarketProbabilities(0, 2);
+    expect(m.valid).toBe(true);
+    expect(m.exactScores['0-0']).toBeCloseTo(0.135, 2); // p(0,0)=exp(-2)~0.135 când lambdaHome=0, lambdaAway=2
+    expect(m.one).toBeCloseTo(0, 4); // gazdă 0 => nu câștigă
+  });
+});

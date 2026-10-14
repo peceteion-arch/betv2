@@ -47,6 +47,7 @@ export function calculateMarketProbabilities(lambdaHome: number, lambdaAway: num
     }
   }
 
+  // Contract de siguranță: valid + converged ambele true => utilizabil; nu ascundem masa exclusă.
   return {
     one: res1X2.one, draw: res1X2.draw, two: res1X2.two,
     oneX: res1X2.one + res1X2.draw,
@@ -59,7 +60,7 @@ export function calculateMarketProbabilities(lambdaHome: number, lambdaAway: num
     over45, under45: 1 - over45,
     bttsYes, bttsNo: 1 - bttsYes,
     odd, even: 1 - odd,
-    exactScores: exact,
+    exactScores: exact, // nu normalizat forțat; masa exclusă în excludedProb
     converged: valid,
     excludedProb: excluded,
     limitInfo: res1X2.limitInfo,
