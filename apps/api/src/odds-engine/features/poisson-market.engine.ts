@@ -17,7 +17,6 @@ export interface MarketProbabilities {
   valid: boolean;
 }
 
-function sumValidP(prob: number, max: number) { return Math.min(1, Math.max(0, prob)); }
 
 export function calculateMarketProbabilities(lambdaHome: number, lambdaAway: number): MarketProbabilities {
   const res1X2 = calculate1X2(lambdaHome, lambdaAway, 1e-9, 100);
