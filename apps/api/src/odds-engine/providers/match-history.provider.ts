@@ -97,6 +97,17 @@ export const matchHistoryProvider = {
     return normalized.filter(m => isMatchEligible(m, asOf));
   },
 
+  async getGlobalMatches(asOf: Date): Promise<NormalizedMatch[]> {
+    validateAsOf(asOf);
+    const matches = await prisma.match.findMany({
+      where: { matchDate: { lt: asOf } },
+      include: { homeTeam: true, awayTeam: true },
+      orderBy: { matchDate: 'asc' },
+    });
+    const normalized = matches.map(normalizeMatch);
+    return normalized.filter(m => isMatchEligible(m, asOf));
+  },
+
   // PASUL 1.7C: Get all eligible matches for a competition before asOf
   async getCompetitionMatches(competitionId: string, asOf: Date): Promise<NormalizedMatch[]> {
     validateAsOf(asOf);

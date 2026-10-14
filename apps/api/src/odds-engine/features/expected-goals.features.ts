@@ -33,6 +33,8 @@ export async function getExpectedGoals(
     isMatchEligible(m, asOf) && m.awayTeamId === awayTeamId
   );
 
+  const globalMatches = await matchHistoryProvider.getGlobalMatches?.(asOf) ?? [];
+
   // 4. Calculăm baseline-ul competiției (independente pentru fiecare lambda)
   let compHomeGoalsAvg: number | null = null;
   let compAwayGoalsAvg: number | null = null;
@@ -46,6 +48,20 @@ export async function getExpectedGoals(
     }
     compHomeGoalsAvg = compHomeGFSum / eligibleCompMatches.length;
     compAwayGoalsAvg = compAwayGFSum / eligibleCompMatches.length;
+  }
+
+  // 4b. Mediile globale din toate meciurile eligibile (toate competițiile, < asOf)
+  let globalHomeGoalsAvg: number | null = null;
+  let globalAwayGoalsAvg: number | null = null;
+  if (globalMatches.length > 0) {
+    let globalHomeSum = 0;
+    let globalAwaySum = 0;
+    for (const m of globalMatches) {
+      globalHomeSum += m.homeScore!;
+      globalAwaySum += m.awayScore!;
+    }
+    globalHomeGoalsAvg = globalHomeSum / globalMatches.length;
+    globalAwayGoalsAvg = globalAwaySum / globalMatches.length;
   }
 
   // 5. Statistici echipe (Istoric Global)
@@ -68,16 +84,16 @@ export async function getExpectedGoals(
   const ataGAAvg = awayEligible.length > 0 ? awayTeamAwayGA / awayEligible.length : null;
 
   // 6. Calcul Final λ conform formulei (independent)
-  const calculateLambda = (forAvg: number | null, againstAvg: number | null, compAvg: number | null) => {
-    if (forAvg === null || againstAvg === null || compAvg === null || compAvg <= 0 || !Number.isFinite(compAvg)) {
+  const calculateLambda = (forAvg: number | null, againstAvg: number | null, compAvg: number | null, globalAvg: number | null) => {
+    if (forAvg === null || againstAvg === null || compAvg === null || globalAvg === null || compAvg <= 0 || globalAvg <= 0 || !Number.isFinite(compAvg) || !Number.isFinite(globalAvg)) {
       return null;
     }
-    const lambda = (forAvg * againstAvg) / compAvg;
+    const lambda = compAvg * (forAvg / globalAvg) * (againstAvg / globalAvg);
     return Number.isFinite(lambda) && lambda >= 0 ? lambda : null;
   };
 
-  const lambdaHome = calculateLambda(hthGFAvg, ataGAAvg, compHomeGoalsAvg);
-  const lambdaAway = calculateLambda(ataGFAvg, hthGAAvg, compAwayGoalsAvg);
+  const lambdaHome = calculateLambda(hthGFAvg, ataGAAvg, compHomeGoalsAvg, globalHomeGoalsAvg);
+  const lambdaAway = calculateLambda(ataGFAvg, hthGAAvg, compAwayGoalsAvg, globalAwayGoalsAvg);
 
   return {
     home: { teamId: homeTeamId, lambdaHome, matchesUsed: homeEligible.length },
