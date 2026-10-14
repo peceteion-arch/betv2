@@ -2,7 +2,7 @@
  * Teste pentru formula ratingului general (PASUL 3D — corectare ponderi).
  * Importă funcția reală; verifică contractul și comportamentul.
  */
-import { getTeamStrength } from './team-strength.features';
+import { getTeamStrength } from '../../src/odds-engine/features/team-strength.features';
 
 describe('team-strength general rating — PASUL 3D', () => {
   it('ponderile sumă 1.00 — fără plafon accidental la 8', () => {
