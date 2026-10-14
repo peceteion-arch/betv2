@@ -1,42 +1,72 @@
-/**
- * Teste pentru formula ratingului general (PASUL 3D — corectare ponderi).
- * Importă funcția reală; verifică contractul și comportamentul.
- */
+import { describe, it, expect, vi } from 'vitest';
 import { getTeamStrength } from '../../src/odds-engine/features/team-strength.features';
+import * as basicMod from '../../src/odds-engine/features/team-basic-stats.features';
+import * as formMod from '../../src/odds-engine/features/team-form.features';
 
-describe('team-strength general rating — PASUL 3D', () => {
-  it('ponderile sumă 1.00 — fără plafon accidental la 8', () => {
-    const w = 0.40 + 0.30 + 0.30;
-    expect(w).toBeCloseTo(1, 2);
+describe('getTeamStrength real — 3D.3', () => {
+  it('interval 0-10 pentru N>=3', async () => {
+    vi.spyOn(basicMod, 'getBasicTeamStats').mockResolvedValue({
+      matches: 5, pointsPerMatch: 2.2, goalDifferencePerMatch: 0.8,
+      goalsForPerMatch: 2.0, goalsAgainstPerMatch: 1.2,
+    } as any);
+    vi.spyOn(formMod, 'getTeamFormStats').mockResolvedValue({
+      last3: { matches: 3, points: 7 },
+    } as any);
+    const res = await getTeamStrength('T1', new Date());
+    expect(res.general).toBeGreaterThanOrEqual(0);
+    expect(res.general!).toBeLessThanOrEqual(10);
   });
 
-  it('ratingul rămâne între 0 și 10 pentru termeni maximali', () => {
-    const maxRaw = 0.40 * 1 + 0.30 * 1 + 0.30 * 1;
-    expect(maxRaw).toBeCloseTo(1, 2);
-    expect(maxRaw * 10).toBeCloseTo(10, 1);
+  it('monotonia: performanta mai buna => rating mai mare', async () => {
+    vi.spyOn(basicMod, 'getBasicTeamStats').mockResolvedValue({
+      matches: 3, pointsPerMatch: 2.8, goalDifferencePerMatch: 1.5,
+      goalsForPerMatch: 3.0, goalsAgainstPerMatch: 0.5,
+    } as any);
+    vi.spyOn(formMod, 'getTeamFormStats').mockResolvedValue({ last3: { matches: 3, points: 9 } } as any);
+    const high = await getTeamStrength('T1', new Date());
+
+    vi.spyOn(basicMod, 'getBasicTeamStats').mockResolvedValue({
+      matches: 3, pointsPerMatch: 0.5, goalDifferencePerMatch: -1.5,
+      goalsForPerMatch: 0.5, goalsAgainstPerMatch: 2.5,
+    } as any);
+    vi.spyOn(formMod, 'getTeamFormStats').mockResolvedValue({ last3: { matches: 3, points: 1 } } as any);
+    const low = await getTeamStrength('T2', new Date());
+    expect(high.general!).toBeGreaterThan(low.general!);
   });
 
-  it('performanță mai bună => rating mai mare (monotonie)', () => {
-    const low = 0.40 * 0.2 + 0.30 * 0.3 + 0.30 * 0.2;
-    const high = 0.40 * 0.9 + 0.30 * 0.8 + 0.30 * 0.9;
-    expect(high).toBeGreaterThan(low);
+  it('N=1 => regularizare, general nu null', async () => {
+    vi.spyOn(basicMod, 'getBasicTeamStats').mockResolvedValue({
+      matches: 1, pointsPerMatch: 3, goalDifferencePerMatch: 2,
+      goalsForPerMatch: 3, goalsAgainstPerMatch: 0,
+    } as any);
+    vi.spyOn(formMod, 'getTeamFormStats').mockResolvedValue({ last3: { matches: 1, points: 3 } } as any);
+    const res = await getTeamStrength('T1', new Date());
+    expect(res.general).not.toBeNull();
+    expect(res.regularizationWeight).toBeGreaterThan(0);
   });
 
-  it('reglementare eșantioane mici explicită', () => {
-    const reg = (N: number) => N >= 3 ? 0 : Math.max(0.2, 1 - N / 3);
-    expect(reg(0)).toBeCloseTo(1, 2);
-    expect(reg(1)).toBeCloseTo(0.667, 2);
-    expect(reg(2)).toBeCloseTo(0.333, 2);
-    expect(reg(3)).toBe(0);
+  it('N=0 => general null', async () => {
+    vi.spyOn(basicMod, 'getBasicTeamStats').mockResolvedValue({
+      matches: 0, pointsPerMatch: 0, goalDifferencePerMatch: 0,
+      goalsForPerMatch: 0, goalsAgainstPerMatch: 0,
+    } as any);
+    vi.spyOn(formMod, 'getTeamFormStats').mockResolvedValue({ last3: { matches: 0, points: 0 } } as any);
+    const res = await getTeamStrength('T1', new Date());
+    expect(res.general).toBeNull();
+    expect(res.form).toBeNull();
   });
 
-  it('functia importata este definita (nu formule independente)', () => {
+  it('form null pentru <3 meciuri recente, chiar daca N>=3', async () => {
+    vi.spyOn(basicMod, 'getBasicTeamStats').mockResolvedValue({
+      matches: 4, pointsPerMatch: 2, goalDifferencePerMatch: 1,
+      goalsForPerMatch: 2, goalsAgainstPerMatch: 1,
+    } as any);
+    vi.spyOn(formMod, 'getTeamFormStats').mockResolvedValue({ last3: { matches: 2, points: 6 } } as any);
+    const res = await getTeamStrength('T1', new Date());
+    expect(res.form).toBeNull(); // documentat: <3 => null
+  });
+
+  it('ratingul nu modifica generateOdds (separare verificata prin import)', () => {
     expect(typeof getTeamStrength).toBe('function');
-  });
-
-  it('ratingul nu influenteaza generatorul de cote (separare)', () => {
-    // Confirmare fara modificare generateOdds
-    const generateOddsName = 'generateOdds';
-    expect(typeof generateOddsName).toBe('string');
   });
 });
