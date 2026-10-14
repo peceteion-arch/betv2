@@ -7,6 +7,7 @@ import { NormalizedMatch } from '../src/odds-engine/providers/match-history.type
 vi.mock('../src/odds-engine/providers/match-history.provider', () => ({
   matchHistoryProvider: {
     getCompetitionMatches: vi.fn(),
+    getGlobalMatches: vi.fn(),
     getTeamMatches: vi.fn(),
   },
 }));
@@ -43,6 +44,9 @@ describe('Expected Goals - PASUL 1.5B.2 audit si corectare', () => {
       makeMatch({ matchId: 'a1', homeTeamId: 'tY', awayTeamId: 'tB', homeScore: 1, awayScore: 2, matchDate: new Date('2025-05-01') }),
     ];
     vi.mocked(matchHistoryProvider.getCompetitionMatches).mockResolvedValue(compMatches);
+    vi.mocked(matchHistoryProvider.getGlobalMatches).mockImplementation(async () => [
+      ...compMatches, ...homeMatches, ...awayMatches,
+    ]);
     vi.mocked(matchHistoryProvider.getTeamMatches).mockImplementation(async (id: string) => {
       if (id === 'tA') return homeMatches;
       if (id === 'tB') return awayMatches;
@@ -63,6 +67,7 @@ describe('Expected Goals - PASUL 1.5B.2 audit si corectare', () => {
       makeMatch({ matchId: 'c2', homeScore: 5, awayScore: 5, matchDate: new Date('2025-06-10'), competitionId: 'c1' }),
     ];
     vi.mocked(matchHistoryProvider.getCompetitionMatches).mockResolvedValue(compMatches);
+    vi.mocked(matchHistoryProvider.getGlobalMatches).mockResolvedValue([]);
     vi.mocked(matchHistoryProvider.getTeamMatches).mockResolvedValue([]);
     const res = await getExpectedGoals('tA', 'tB', new Date('2025-06-10'), 'c1');
     expect(res.home.lambdaHome).toBeNull();
@@ -70,6 +75,7 @@ describe('Expected Goals - PASUL 1.5B.2 audit si corectare', () => {
 
   it('returneaza null cand lipseste istoricul echipei sau media competitiei', async () => {
     vi.mocked(matchHistoryProvider.getCompetitionMatches).mockResolvedValue([]);
+    vi.mocked(matchHistoryProvider.getGlobalMatches).mockResolvedValue([]);
     vi.mocked(matchHistoryProvider.getTeamMatches).mockResolvedValue([]);
     const res = await getExpectedGoals('tA', 'tB', new Date('2025-06-10'), 'c1');
     expect(res.home.lambdaHome).toBeNull();
@@ -83,6 +89,7 @@ describe('Expected Goals - PASUL 1.5B.2 audit si corectare', () => {
       makeMatch({ matchId: 'bad3', homeScore: null, awayScore: 1, matchDate: new Date('2025-05-03'), competitionId: 'c1' }),
     ];
     vi.mocked(matchHistoryProvider.getCompetitionMatches).mockResolvedValue(compMatches);
+    vi.mocked(matchHistoryProvider.getGlobalMatches).mockResolvedValue([]);
     vi.mocked(matchHistoryProvider.getTeamMatches).mockResolvedValue([]);
     const res = await getExpectedGoals('tA', 'tB', new Date('2025-06-10'), 'c1');
     expect(res.home.lambdaHome).toBeNull();
@@ -97,6 +104,7 @@ describe('Expected Goals - PASUL 1.5B.2 audit si corectare', () => {
     ];
     vi.mocked(matchHistoryProvider.getTeamMatches).mockImplementation(async (id: string) => allMatches);
     vi.mocked(matchHistoryProvider.getCompetitionMatches).mockResolvedValue(allMatches.filter(m => m.matchId === 'past'));
+    vi.mocked(matchHistoryProvider.getGlobalMatches).mockResolvedValue(allMatches.filter(m => m.status === 'FINISHED' && m.matchDate < new Date('2025-06-10')));
     const res = await getExpectedGoals('tA', 'tB', new Date('2025-06-10'), 'c1');
     expect(res.home.matchesUsed).toBe(0); // past meci e pentru tA doar daca tA e homeTeamId, dar mock returneaza allMatches pentru orice id; verificam doar ca viitorul e exclus
   });
@@ -116,6 +124,11 @@ describe('Expected Goals - PASUL 1.5B.2 audit si corectare', () => {
       if (compId === 'low') return lowComp;
       return highComp;
     });
+    vi.mocked(matchHistoryProvider.getGlobalMatches).mockImplementation(async () => [
+      ...lowComp,
+      ...highComp,
+      ...teamMatches,
+    ]);
     const resLow = await getExpectedGoals('tA', 'tB', new Date('2025-06-10'), 'low');
     const resHigh = await getExpectedGoals('tA', 'tB', new Date('2025-06-10'), 'high');
     expect(resLow.home.lambdaHome).toBeGreaterThanOrEqual(0);
