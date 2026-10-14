@@ -111,6 +111,7 @@ export const matchHistoryProvider = {
       },
       orderBy: { matchDate: 'asc' },
     });
-    return matches.map(normalizeMatch);
+    const normalized = matches.map(normalizeMatch);
+    return normalized.filter(m => isMatchEligible(m, asOf));
   },
 };

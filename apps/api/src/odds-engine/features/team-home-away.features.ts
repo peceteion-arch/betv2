@@ -2,6 +2,7 @@ import { matchHistoryProvider } from '../providers/match-history.provider';
 import { NormalizedMatch } from '../providers/match-history.types';
 import { BasicTeamStats } from './team-basic-stats.types';
 import { TeamHomeAwayStats } from './team-home-away.types';
+import { isMatchEligible } from './match-eligibility.utils';
 
 /**
  * Calculates statistics for a team specifically for matches where they were the HOME team.
@@ -107,14 +108,7 @@ function calculateVenueStats(matches: NormalizedMatch[], teamId: string): BasicT
 export async function getTeamHomeAwayStats(teamId: string, asOf: Date): Promise<TeamHomeAwayStats> {
   const allMatches = await matchHistoryProvider.getTeamMatches(teamId, asOf);
 
-  // Filter eligible matches: FINISHED and both scores not null
-  const eligibleMatches = allMatches.filter(
-    (match) =>
-      match.status === 'FINISHED' &&
-      match.homeScore !== null &&
-      match.awayScore !== null &&
-      match.matchDate < asOf
-  );
+  const eligibleMatches = allMatches.filter((match) => isMatchEligible(match, asOf));
 
   const homeMatches = eligibleMatches.filter((m) => m.homeTeamId === teamId);
   const awayMatches = eligibleMatches.filter((m) => m.awayTeamId === teamId);

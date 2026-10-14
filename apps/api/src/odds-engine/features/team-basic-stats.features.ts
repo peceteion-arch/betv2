@@ -1,4 +1,5 @@
 import { matchHistoryProvider } from '../providers/match-history.provider';
+import { isMatchEligible } from './match-eligibility.utils';
 import { NormalizedMatch } from '../providers/match-history.types';
 import { BasicTeamStats } from './team-basic-stats.types';
 
