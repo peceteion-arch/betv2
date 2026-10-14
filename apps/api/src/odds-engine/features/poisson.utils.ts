@@ -81,10 +81,10 @@ export function exactScoreProb(g: number, a: number, lambdaHome: number, lambdaA
 /**
  * Calculează probabilitățile 1, X, 2 folosind o limită adaptivă pentru a asigura precizia.
  *
- * @param lambdaHome Media golurilor pentru gazdă
- * @param lambdaAway Media golurilor pentru oaspeți
- * @param tolerance Toleranța maximă acceptată pentru masa probabilistă exclusă (default 1e-9)
- * @param absoluteMaxLimit Limita de siguranță pentru a preveni bucle infinite (default 100)
+ * @param lambdaHome Media golurilor pentru gazdă (trebuie să fie număr finit >= 0)
+ * @param lambdaAway Media golurilor pentru oaspeți (trebuie să fie număr finit >= 0)
+ * @param tolerance Toleranța maximă acceptată pentru masa probabilistă exclusă (0 < tolerance < 1, default 1e-9)
+ * @param absoluteMaxLimit Limita de siguranță pentru a preveni bucle infinite (număr întreg finit > 0, default 100)
  * @returns Obiectul care conține probabilitățile, starea de convergență și informații despre limite.
  */
 export function calculate1X2(
@@ -101,8 +101,10 @@ export function calculate1X2(
     lambdaAway < 0 ||
     !Number.isFinite(tolerance) ||
     tolerance <= 0 ||
+    tolerance >= 1 ||
     !Number.isFinite(absoluteMaxLimit) ||
-    absoluteMaxLimit <= 0
+    absoluteMaxLimit <= 0 ||
+    !Number.isInteger(absoluteMaxLimit)
   ) {
     return {
       one: 0,
@@ -127,11 +129,33 @@ export function calculate1X2(
   let maxHome = 10;
   let maxAway = 10;
 
+  // Limita inițială nu poate depăși limita absolută cerută
+  maxHome = Math.min(maxHome, absoluteMaxLimit);
+  maxAway = Math.min(maxAway, absoluteMaxLimit);
+
   let currentIter = 0;
   const maxIterations = 15;
   let converged = false;
 
+  // Caz degenerat: limita absolută prea mică (0) — nimic nu se calculează
+  if (maxHome === 0 || maxAway === 0) {
+    return {
+      one: 0,
+      draw: 0,
+      two: 0,
+      excludedProb: 1,
+      converged: false,
+      limitInfo: {
+        maxHome,
+        maxAway,
+        excludedMass: 1,
+        errorEstimate: 1,
+      },
+    };
+  }
+
   while (currentIter < maxIterations) {
+    // Calculăm o singură dată pentru perechea curentă de limite
     one = 0;
     draw = 0;
     two = 0;
@@ -155,26 +179,29 @@ export function calculate1X2(
       break;
     }
 
-    // Verificăm dacă am atins limita de siguranță
-    if (maxHome >= absoluteMaxLimit || maxAway >= absoluteMaxLimit) {
+    // Am atins limita maximă atât pentru home cât și away — nu putem crește mai mult
+    if (maxHome >= absoluteMaxLimit && maxAway >= absoluteMaxLimit) {
       break;
     }
 
-    // Creștem limitele adaptiv
-    maxHome = Math.max(maxHome + 5, Math.ceil(lambdaHome * 3));
-    maxAway = Math.max(maxAway + 5, Math.ceil(lambdaAway * 3));
-
-    // Capsăm la limita absolută
-    maxHome = Math.min(maxHome, absoluteMaxLimit);
-    maxAway = Math.min(maxAway, absoluteMaxLimit);
+    // Creștem limitele adaptiv, fără a depăși limita absolută
+    maxHome = Math.min(Math.max(maxHome + 5, Math.ceil(lambdaHome * 3)), absoluteMaxLimit);
+    maxAway = Math.min(Math.max(maxAway + 5, Math.ceil(lambdaAway * 3)), absoluteMaxLimit);
 
     currentIter++;
   }
 
-  // Calcul robust al masei excluse
-  // Folosim un calcul separat pentru a evita acumularea de erori în totalProb
-  // dar pentru a raporta masa exclusă reală din contextul calculat.
-  const finalExcludedProb = Math.max(0, 1 - totalProb);
+  // Masa exclusă se estimează ca lipsa față de 1 a probabilităților incluse.
+  // Nu forțăm zero: dacă calculul numeric indică o masă negativă (eroare de
+  // rotundire), aceasta este semnalată ca atenție, nu tăcută.
+  const rawExcludedProb = 1 - totalProb;
+  const finalExcludedProb = rawExcludedProb;
+
+  // O masă negativă este o indicație clară de eroare numerică (totalProb > 1),
+  // nu un rezultat valid; nu putem pretinde convergență într-un astfel de caz.
+  if (finalExcludedProb < 0) {
+    converged = false;
+  }
 
   return {
     one,

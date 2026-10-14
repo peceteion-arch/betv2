@@ -26,6 +26,17 @@ describe('poisson.utils', () => {
       expect(result).toBeLessThan(0.06);
     });
 
+    it('P(X = 50 | lambda = 50) ≈ 0.05632500632519006 (referință independentă)', () => {
+      // Valoare de referință calculată independent, fără a folosi funcția testată:
+      // ln P = 50*ln(50) - 50 - ln(50!) = -2.8766166803657427
+      // P = exp(ln P) = 0.05632500632519006
+      // toBeCloseTo cu precizia 12 oferă toleranța 1e-12, mult peste eroarea
+      // numerică a implementării (~1.6e-15), deci aserțiunea nu este strângătoare.
+      const result = poissonProb(50, 50);
+      expect(result).toBeCloseTo(0.05632500632519006, 12);
+      expect(Number.isFinite(result)).toBe(true);
+    });
+
     it('gestionează lambda=0 - corect', () => {
       expect(poissonProb(0, 0)).toBe(1); // Singurul scor posibil
       expect(poissonProb(1, 0)).toBe(0); // Goluri sunt imposibile
@@ -78,6 +89,33 @@ describe('poisson.utils', () => {
       expect(exactScoreProb(Infinity, 0, 1, 1)).toBe(0);
       expect(exactScoreProb(0, Infinity, 1, 1)).toBe(0);
     });
+
+    it('scorul exact 11-0 (lambda=1) ≈ 3.390434184018073e-09', () => {
+      // Referință independentă: P(11|1)*P(0|1) = (e^-1/11!)*e^-1 = e^-2/11!
+      // e^-2 ≈ 0.1353352832366127, 11! = 39916800
+      // prob = 0.1353352832366127 / 39916800 ≈ 3.390434184018073e-09
+      const prob = exactScoreProb(11, 0, 1, 1);
+      expect(prob).toBeCloseTo(3.390434184018073e-09, 13);
+      expect(Number.isFinite(prob)).toBe(true);
+    });
+
+    it('scorul exact 13-0 (lambda=1) ≈ 2.173355246165429e-11', () => {
+      // Referință independentă: e^-2 / 13!
+      // 13! = 6227020800
+      // prob = 0.1353352832366127 / 6227020800 ≈ 2.173355246165429e-11
+      const prob = exactScoreProb(13, 0, 1, 1);
+      expect(prob).toBeCloseTo(2.173355246165429e-11, 12);
+      expect(Number.isFinite(prob)).toBe(true);
+    });
+
+    it('scorul exact 15-0 (lambda=1) ≈ 1.034931069602588e-13', () => {
+      // Referință independentă: e^-2 / 15!
+      // 15! = 1307674368000
+      // prob = 0.1353352832366127 / 1307674368000 ≈ 1.034931069602588e-13
+      const prob = exactScoreProb(15, 0, 1, 1);
+      expect(prob).toBeCloseTo(1.034931069602588e-13, 11);
+      expect(Number.isFinite(prob)).toBe(true);
+    });
   });
 
   describe('calculate1X2 (Adaptive Limits)', () => {
@@ -94,6 +132,50 @@ describe('poisson.utils', () => {
       const res = calculate1X2(1, 1, 1e-10);
       expect(res.converged).toBe(true);
       expect(res.excludedProb).toBeLessThan(1e-9);
+    });
+
+    it('toleranța = 0 este respinsă (convergență artificială)', () => {
+      // tolerance <= 0 nu este o toleranță validă: nu ar fi putut justifica niciodată
+      // o precizie, ci ar fi permis declararea convergenței oricând.
+      const res = calculate1X2(1, 1, 0);
+      expect(res.converged).toBe(false);
+      expect(res.excludedProb).toBe(1);
+      expect(res.one).toBe(0);
+    });
+
+    it('toleranța negativă este respinsă', () => {
+      const res = calculate1X2(1, 1, -1e-6);
+      expect(res.converged).toBe(false);
+      expect(res.excludedProb).toBe(1);
+    });
+
+    it('toleranța NaN este respinsă', () => {
+      const res = calculate1X2(1, 1, NaN);
+      expect(res.converged).toBe(false);
+      expect(res.excludedProb).toBe(1);
+    });
+
+    it('toleranța Infinity este respinsă', () => {
+      const res = calculate1X2(1, 1, Infinity);
+      expect(res.converged).toBe(false);
+      expect(res.excludedProb).toBe(1);
+    });
+
+    it('toleranța >= 1 este respinsă (permite declararea artificială a convergenței)', () => {
+      // O toleranță de 1 ar însemna "acceptăm orice masă exclusă", adică
+      // am putea pretinde convergența fără nicio verificare reală a preciziei.
+      const res = calculate1X2(1, 1, 1);
+      expect(res.converged).toBe(false);
+      expect(res.excludedProb).toBe(1);
+    });
+
+    it('toleranța validă între 0 și 1 permite convergență când este atinsă', () => {
+      // O toleranță validă (0 < tolerance < 1) ar trebui să permită convergența
+      // când masa exclusă este sub acea toleranță.
+      const res = calculate1X2(1, 1, 0.5);
+      // Pentru lambda=1, masa exclusă naturală este mult sub 0.5, deci convergem
+      expect(res.converged).toBe(true);
+      expect(res.excludedProb).toBeLessThan(0.5);
     });
 
     it('rezultatele sunt non-NaN și finite', () => {
@@ -151,6 +233,43 @@ describe('poisson.utils', () => {
       expect(res.one + res.draw + res.two + res.excludedProb).toBeLessThan(1.0000000001);
       expect(res.limitInfo.maxHome).toBeLessThanOrEqual(30);
       expect(res.limitInfo.errorEstimate).toBeGreaterThan(0);
+    });
+
+    it('limita absolută sub 10 (5) nu converge și nu calculează peste ea', () => {
+      // lambda=10 are nevoie de limită cel puțin ~35 pentru toleranța 1e-9;
+      // cu limita 5 nu se atinge convergența și nicio scor nu este calculat dincolo de 5.
+      const res = calculate1X2(10, 10, 1e-9, 5);
+      expect(res.converged).toBe(false);
+      expect(res.limitInfo.maxHome).toBe(5);
+      expect(res.limitInfo.maxAway).toBe(5);
+      expect(res.limitInfo.maxHome).toBeLessThanOrEqual(5);
+      // Limitele nu depășesc niciodată valoarea cerută
+      expect(res.limitInfo.maxHome).toBeLessThanOrEqual(5);
+    });
+
+    it('limita absolută suficientă (40) pentru lambda=10 converge', () => {
+      // lambda=10 are CDF(10,40) ≈ 1 - 1.75e-13, deci limita 40 este suficientă
+      const res = calculate1X2(10, 10, 1e-9, 40);
+      expect(res.converged).toBe(true);
+      expect(res.limitInfo.maxHome).toBeLessThanOrEqual(40);
+      expect(res.limitInfo.maxAway).toBeLessThanOrEqual(40);
+      expect(res.excludedProb).toBeLessThan(1e-9);
+    });
+
+    it('limita absolută = 0 returnează masă exclusă completă', () => {
+      const res = calculate1X2(1, 1, 1e-9, 0);
+      expect(res.converged).toBe(false);
+      expect(res.excludedProb).toBe(1);
+      expect(res.one).toBe(0);
+    });
+
+    it('absoluteMaxLimit negativ sau NaN este respins', () => {
+      const resNeg = calculate1X2(1, 1, 1e-9, -5);
+      expect(resNeg.converged).toBe(false);
+      expect(resNeg.excludedProb).toBe(1);
+      const resNaN = calculate1X2(1, 1, 1e-9, NaN);
+      expect(resNaN.converged).toBe(false);
+      expect(resNaN.excludedProb).toBe(1);
     });
 
     it('asimetrie extremă (0.1 - 10) rezolvă corect', () => {
