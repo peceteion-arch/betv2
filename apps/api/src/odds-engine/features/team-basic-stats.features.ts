@@ -6,14 +6,8 @@ export async function getBasicTeamStats(teamId: string, asOf: Date): Promise<Bas
   // Temporal cutoff documented: only matches with matchDate < asOf are considered.
   const allMatches = await matchHistoryProvider.getTeamMatches(teamId, asOf);
 
-  // Filter eligible matches: FINISHED, both scores not null, and date < asOf
-  const eligibleMatches = allMatches.filter(
-    (match) =>
-      match.status === 'FINISHED' &&
-      match.homeScore !== null &&
-      match.awayScore !== null &&
-      match.matchDate < asOf
-  );
+  // Filter eligible matches using common eligibility rule
+  const eligibleMatches = allMatches.filter((match) => isMatchEligible(match, asOf));
 
   // Initialize counters
   let matches = 0;

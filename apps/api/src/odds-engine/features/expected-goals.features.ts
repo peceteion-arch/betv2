@@ -1,6 +1,7 @@
 import { matchHistoryProvider } from '../providers/match-history.provider';
 import { NormalizedMatch } from '../providers/match-history.types';
 import { ExpectedGoalsResult } from './expected-goals.types';
+import { isMatchEligible } from './match-eligibility.utils';
 
 /**
  * Calculează golurile așteptate (xG) normalizate pentru gazde și oaspeți.
@@ -88,15 +89,3 @@ export async function getExpectedGoals(
  * Verifică eligibilitatea unui meci.
  * Un meci este eligibil dacă: FINISHED, scoruri finite și non-negative, și data < asOf.
  */
-function isMatchEligible(m: NormalizedMatch, asOf: Date): boolean {
-  return (
-    m.status === 'FINISHED' &&
-    m.homeScore !== null &&
-    m.awayScore !== null &&
-    Number.isFinite(m.homeScore) &&
-    Number.isFinite(m.awayScore) &&
-    m.homeScore >= 0 &&
-    m.awayScore >= 0 &&
-    m.matchDate < asOf
-  );
-}

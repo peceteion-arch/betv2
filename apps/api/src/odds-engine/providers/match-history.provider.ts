@@ -1,6 +1,7 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../lib/prisma';
 import { NormalizedMatch } from './match-history.types';
+import { isMatchEligible } from '../features/match-eligibility.utils';
 
 // Shape returned by the provider queries: the Match row plus its two teams.
 type MatchWithTeams = Prisma.MatchGetPayload<{
@@ -92,7 +93,8 @@ export const matchHistoryProvider = {
       },
       orderBy: { matchDate: 'asc' },
     });
-    return matches.map(normalizeMatch);
+    const normalized = matches.map(normalizeMatch);
+    return normalized.filter(m => isMatchEligible(m, asOf));
   },
 
   // PASUL 1.7C: Get all eligible matches for a competition before asOf

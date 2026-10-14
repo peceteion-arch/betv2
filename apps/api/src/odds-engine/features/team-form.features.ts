@@ -1,19 +1,14 @@
 import { matchHistoryProvider } from '../providers/match-history.provider';
 import { NormalizedMatch } from '../providers/match-history.types';
 import { TeamFormStats, TeamFormWindowStats } from './team-form.types';
+import { isMatchEligible } from './match-eligibility.utils';
 
 export async function getTeamFormStats(teamId: string, asOf: Date): Promise<TeamFormStats> {
   // Temporal cutoff: only matches before asOf are eligible for form analysis.
   const allMatches = await matchHistoryProvider.getTeamMatches(teamId, asOf);
 
   // 2. Filter eligible matches: status === 'FINISHED', both scores are not null, and date < asOf
-  const eligibleMatches = allMatches.filter(
-    (match) =>
-      match.status === 'FINISHED' &&
-      match.homeScore !== null &&
-      match.awayScore !== null &&
-      match.matchDate < asOf
-  );
+  const eligibleMatches = allMatches.filter((match) => isMatchEligible(match, asOf));
 
   // 3. Sort chronologically (oldest to newest)
   // Standard sort using matchDate first, with matchId as a deterministic tie-breaker

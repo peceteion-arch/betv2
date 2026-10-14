@@ -2,6 +2,7 @@ import { matchHistoryProvider } from '../providers/match-history.provider';
 import { NormalizedMatch } from '../providers/match-history.types';
 import { H2HStats } from './h2h-stats.types';
 import { calculateScoreDistribution } from './score-distribution.utils';
+import { isMatchEligible } from './match-eligibility.utils';
 
 export async function getH2HStats(
   teamAId: string,
@@ -15,13 +16,7 @@ export async function getH2HStats(
   const allMatches = await matchHistoryProvider.getHeadToHead(teamAId, teamBId, asOf);
 
   // Filter eligible matches: FINISHED, both scores not null, and strictly before asOf
-  const eligibleMatches = allMatches.filter(
-    (match) =>
-      match.status === 'FINISHED' &&
-      match.homeScore !== null &&
-      match.awayScore !== null &&
-      match.matchDate < asOf
-  );
+  const eligibleMatches = allMatches.filter((match) => isMatchEligible(match, asOf));
 
   // Further filter to only include matches that actually involve both teams (H2H)
   const h2hEligibleMatches = eligibleMatches.filter(

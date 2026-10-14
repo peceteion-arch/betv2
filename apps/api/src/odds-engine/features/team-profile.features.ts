@@ -2,6 +2,7 @@ import { getBasicTeamStats } from './team-basic-stats.features';
 import { getTeamFormStats } from './team-form.features';
 import { getTeamHomeAwayStats } from './team-home-away.features';
 import { TeamProfile } from './team-profile.types';
+import { isMatchEligible } from './match-eligibility.utils';
 import { matchHistoryProvider } from '../providers/match-history.provider';
 import { calculateScoreDistribution } from './score-distribution.utils';
 
@@ -17,13 +18,7 @@ export async function getTeamProfile(teamId: string, asOf: Date): Promise<TeamPr
     matchHistoryProvider.getTeamMatches(teamId, asOf),
   ]);
 
-  const eligibleMatches = allMatches.filter(
-    (match) =>
-      match.status === 'FINISHED' &&
-      match.homeScore !== null &&
-      match.awayScore !== null &&
-      match.matchDate < asOf
-  );
+  const eligibleMatches = allMatches.filter((match) => isMatchEligible(match, asOf));
 
   const scoreDistribution = calculateScoreDistribution(
     eligibleMatches
