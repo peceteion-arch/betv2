@@ -1,5 +1,6 @@
 import { matchHistoryProvider } from '../providers/match-history.provider';
 import { isMatchEligible } from './match-eligibility.utils';
+import { getTeamMatchResult } from './match-result.utils';
 import { NormalizedMatch } from '../providers/match-history.types';
 import { BasicTeamStats } from './team-basic-stats.types';
 
@@ -26,25 +27,20 @@ export async function getBasicTeamStats(teamId: string, asOf: Date): Promise<Bas
   let over35 = 0;
 
   for (const match of eligibleMatches) {
-    // Determine if team is home or away
-    const isHome = match.homeTeamId === teamId;
-    const teamGoalsFor = isHome ? match.homeScore! : match.awayScore!;
-    const teamGoalsAgainst = isHome ? match.awayScore! : match.homeScore!;
+    // Rezultatul din perspectiva echipei — logica comuna (match-result.utils)
+    const result = getTeamMatchResult(match, teamId);
+    if (!result) continue; // echipa nu joaca in meci sau lipsesc scorurile
 
-    // Update goals
+    const teamGoalsFor = result.goalsFor;
+    const teamGoalsAgainst = result.goalsAgainst;
+
     goalsFor += teamGoalsFor;
     goalsAgainst += teamGoalsAgainst;
+    points += result.points;
 
-    // Determine result
-    if (teamGoalsFor > teamGoalsAgainst) {
-      wins++;
-      points += 3;
-    } else if (teamGoalsFor === teamGoalsAgainst) {
-      draws++;
-      points += 1;
-    } else {
-      losses++;
-    }
+    if (result.outcome === 'WIN') wins++;
+    else if (result.outcome === 'DRAW') draws++;
+    else losses++;
 
     // Clean sheet
     if (teamGoalsAgainst === 0) {

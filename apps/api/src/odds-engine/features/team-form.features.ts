@@ -2,6 +2,7 @@ import { matchHistoryProvider } from '../providers/match-history.provider';
 import { NormalizedMatch } from '../providers/match-history.types';
 import { TeamFormStats, TeamFormWindowStats } from './team-form.types';
 import { isMatchEligible } from './match-eligibility.utils';
+import { getTeamMatchResult } from './match-result.utils';
 
 export async function getTeamFormStats(teamId: string, asOf: Date): Promise<TeamFormStats> {
   // Temporal cutoff: only matches before asOf are eligible for form analysis.
@@ -54,22 +55,20 @@ function calculateWindowStats(matches: NormalizedMatch[], teamId: string): TeamF
   let over35 = 0;
 
   for (const match of matches) {
-    const isHome = match.homeTeamId === teamId;
-    const teamGoalsFor = isHome ? match.homeScore! : match.awayScore!;
-    const teamGoalsAgainst = isHome ? match.awayScore! : match.homeScore!;
+    // Rezultatul din perspectiva echipei — logica comuna (match-result.utils)
+    const result = getTeamMatchResult(match, teamId);
+    if (!result) continue; // echipa nu joaca in meci sau lipsesc scorurile
+
+    const teamGoalsFor = result.goalsFor;
+    const teamGoalsAgainst = result.goalsAgainst;
 
     goalsFor += teamGoalsFor;
     goalsAgainst += teamGoalsAgainst;
+    points += result.points;
 
-    if (teamGoalsFor > teamGoalsAgainst) {
-      wins++;
-      points += 3;
-    } else if (teamGoalsFor === teamGoalsAgainst) {
-      draws++;
-      points += 1;
-    } else {
-      losses++;
-    }
+    if (result.outcome === 'WIN') wins++;
+    else if (result.outcome === 'DRAW') draws++;
+    else losses++;
 
     if (teamGoalsAgainst === 0) {
       cleanSheets++;
@@ -89,7 +88,7 @@ function calculateWindowStats(matches: NormalizedMatch[], teamId: string): TeamF
     if (totalGoals >= 4) over35++;
   }
 
-  const matchesCount = matches.length;
+  const matchesCount = wins + draws + losses; // doar meciurile cu rezultat valid
 
   const pointsPerMatch = matchesCount > 0 ? points / matchesCount : null;
   const goalsForPerMatch = matchesCount > 0 ? goalsFor / matchesCount : null;

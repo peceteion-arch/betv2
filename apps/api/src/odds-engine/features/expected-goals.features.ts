@@ -2,106 +2,112 @@ import { matchHistoryProvider } from '../providers/match-history.provider';
 import { NormalizedMatch } from '../providers/match-history.types';
 import { ExpectedGoalsResult } from './expected-goals.types';
 import { isMatchEligible } from './match-eligibility.utils';
+import { getTeamMatchResult } from './match-result.utils';
 
 /**
- * Calculează golurile așteptate (xG) normalizate pentru gazde și oaspeți.
- * Formula convenită (PASUL 1.7):
- * lambdaHome = competitionHomeGoalsAvg * (homeTeamHomeGFAvg / globalHomeGoalsAvg) * (awayTeamAwayGAAvg / globalHomeGoalsAvg)
- * lambdaAway = competitionAwayGoalsAvg * (awayTeamAwayGFAvg / globalAwayGoalsAvg) * (homeTeamHomeGAAvg / globalAwayGoalsAvg)
+ * Goluri asteptate (xG) FARA separare acasa/deplasare.
+ *
+ * Toate meciurile se joaca pe acelasi teren, deci "gazda" / "oaspete" sunt
+ * doar etichete: primul argument este echipa A, al doilea echipa B. Se
+ * folosesc TOATE meciurile eligibile ale fiecarei echipe (din toate
+ * competitiile), indiferent cine figura ca gazda.
+ *
+ * Formula:
+ *   lambdaA = compAvg * (GF_A / globalAvg) * (GA_B / globalAvg)
+ *   lambdaB = compAvg * (GF_B / globalAvg) * (GA_A / globalAvg)
+ * unde:
+ *   - GF_X / GA_X = media golurilor date / primite de echipa X pe meci
+ *   - globalAvg   = media golurilor pe echipa si pe meci, toate competitiile
+ *   - compAvg     = media golurilor pe echipa si pe meci, competitia curenta
+ *
+ * NU face inca ajustare dupa forta adversarilor din meciurile trecute si nu
+ * pondereaza dupa recenta — acestea sunt pasi urmatori (ratinguri atac/aparare).
  */
+
+/** Media golurilor pe echipa si pe meci: (goluri gazda + goluri oaspeti) / (2 * meciuri). */
+function avgGoalsPerTeam(matches: NormalizedMatch[]): number | null {
+  if (matches.length === 0) return null;
+  let total = 0;
+  for (const m of matches) {
+    total += m.homeScore! + m.awayScore!;
+  }
+  return total / (2 * matches.length);
+}
+
+interface TeamAverages {
+  gfAvg: number | null;
+  gaAvg: number | null;
+  matchesUsed: number;
+}
+
+/** Media golurilor date / primite de o echipa, din toate meciurile eligibile. */
+function teamAverages(matches: NormalizedMatch[], teamId: string, asOf: Date): TeamAverages {
+  let gf = 0;
+  let ga = 0;
+  let n = 0;
+  for (const m of matches) {
+    if (!isMatchEligible(m, asOf)) continue;
+    const res = getTeamMatchResult(m, teamId);
+    if (!res) continue;
+    gf += res.goalsFor;
+    ga += res.goalsAgainst;
+    n++;
+  }
+  return {
+    gfAvg: n > 0 ? gf / n : null,
+    gaAvg: n > 0 ? ga / n : null,
+    matchesUsed: n,
+  };
+}
+
+function calculateLambda(
+  attackAvg: number | null,
+  concededAvg: number | null,
+  compAvg: number | null,
+  globalAvg: number | null
+): number | null {
+  if (
+    attackAvg === null || concededAvg === null || compAvg === null || globalAvg === null ||
+    !Number.isFinite(compAvg) || !Number.isFinite(globalAvg) ||
+    compAvg <= 0 || globalAvg <= 0
+  ) {
+    return null;
+  }
+  const lambda = compAvg * (attackAvg / globalAvg) * (concededAvg / globalAvg);
+  return Number.isFinite(lambda) && lambda >= 0 ? lambda : null;
+}
+
 export async function getExpectedGoals(
   homeTeamId: string,
   awayTeamId: string,
   asOf: Date,
   competitionId: string
 ): Promise<ExpectedGoalsResult> {
-  // 1. Obținem meciurile competiției pentru baseline (strict pe competitionId)
+  // 1. Baseline competitie (strict pe competitionId, doar meciuri eligibile)
   const competitionMatches = await matchHistoryProvider.getCompetitionMatches(competitionId, asOf);
-  const eligibleCompMatches = competitionMatches.filter(m =>
-    isMatchEligible(m, asOf) && m.competitionId === competitionId
+  const eligibleCompMatches = competitionMatches.filter(
+    (m) => isMatchEligible(m, asOf) && m.competitionId === competitionId
   );
+  const compAvg = avgGoalsPerTeam(eligibleCompMatches);
 
-  // 2. Obținem istoricul GLOBAL al echipelor (din toate competițiile)
-  const homeTeamMatches = await matchHistoryProvider.getTeamMatches(homeTeamId, asOf);
-  const awayTeamMatches = await matchHistoryProvider.getTeamMatches(awayTeamId, asOf);
-
-  // 3. Filtrăm meciurile relevante pentru fiecare echipă (Acasă pentru gazdă, Deplasare pentru oaspete)
-  const homeEligible = homeTeamMatches.filter(m =>
-    isMatchEligible(m, asOf) && m.homeTeamId === homeTeamId
+  // 2. Baseline global (toate competitiile, doar meciuri eligibile)
+  const globalMatches = (await matchHistoryProvider.getGlobalMatches(asOf)).filter((m) =>
+    isMatchEligible(m, asOf)
   );
-  const awayEligible = awayTeamMatches.filter(m =>
-    isMatchEligible(m, asOf) && m.awayTeamId === awayTeamId
-  );
+  const globalAvg = avgGoalsPerTeam(globalMatches);
 
-  const globalMatches = await matchHistoryProvider.getGlobalMatches(asOf);
+  // 3. Istoricul fiecarei echipe — toate meciurile, fara filtru acasa/deplasare
+  const teamAMatches = await matchHistoryProvider.getTeamMatches(homeTeamId, asOf);
+  const teamBMatches = await matchHistoryProvider.getTeamMatches(awayTeamId, asOf);
+  const a = teamAverages(teamAMatches, homeTeamId, asOf);
+  const b = teamAverages(teamBMatches, awayTeamId, asOf);
 
-  // 4. Calculăm baseline-ul competiției (independente pentru fiecare lambda)
-  let compHomeGoalsAvg: number | null = null;
-  let compAwayGoalsAvg: number | null = null;
-
-  if (eligibleCompMatches.length > 0) {
-    let compHomeGFSum = 0;
-    let compAwayGFSum = 0;
-    for (const m of eligibleCompMatches) {
-      compHomeGFSum += m.homeScore!;
-      compAwayGFSum += m.awayScore!;
-    }
-    compHomeGoalsAvg = compHomeGFSum / eligibleCompMatches.length;
-    compAwayGoalsAvg = compAwayGFSum / eligibleCompMatches.length;
-  }
-
-  // 4b. Mediile globale din toate meciurile eligibile (toate competițiile, < asOf)
-  let globalHomeGoalsAvg: number | null = null;
-  let globalAwayGoalsAvg: number | null = null;
-  if (globalMatches.length > 0) {
-    let globalHomeSum = 0;
-    let globalAwaySum = 0;
-    for (const m of globalMatches) {
-      globalHomeSum += m.homeScore!;
-      globalAwaySum += m.awayScore!;
-    }
-    globalHomeGoalsAvg = globalHomeSum / globalMatches.length;
-    globalAwayGoalsAvg = globalAwaySum / globalMatches.length;
-  }
-
-  // 5. Statistici echipe (Istoric Global)
-  let homeTeamHomeGF = 0;
-  let homeTeamHomeGA = 0;
-  for (const m of homeEligible) {
-    homeTeamHomeGF += m.homeScore!;
-    homeTeamHomeGA += m.awayScore!;
-  }
-  const hthGFAvg = homeEligible.length > 0 ? homeTeamHomeGF / homeEligible.length : null;
-  const hthGAAvg = homeEligible.length > 0 ? homeTeamHomeGA / homeEligible.length : null;
-
-  let awayTeamAwayGF = 0;
-  let awayTeamAwayGA = 0;
-  for (const m of awayEligible) {
-    awayTeamAwayGF += m.awayScore!;
-    awayTeamAwayGA += m.homeScore!;
-  }
-  const ataGFAvg = awayEligible.length > 0 ? awayTeamAwayGF / awayEligible.length : null;
-  const ataGAAvg = awayEligible.length > 0 ? awayTeamAwayGA / awayEligible.length : null;
-
-  // 6. Calcul Final λ conform formulei (independent)
-  const calculateLambda = (forAvg: number | null, againstAvg: number | null, compAvg: number | null, globalAvg: number | null) => {
-    if (forAvg === null || againstAvg === null || compAvg === null || globalAvg === null || compAvg <= 0 || globalAvg <= 0 || !Number.isFinite(compAvg) || !Number.isFinite(globalAvg)) {
-      return null;
-    }
-    const lambda = compAvg * (forAvg / globalAvg) * (againstAvg / globalAvg);
-    return Number.isFinite(lambda) && lambda >= 0 ? lambda : null;
-  };
-
-  const lambdaHome = calculateLambda(hthGFAvg, ataGAAvg, compHomeGoalsAvg, globalHomeGoalsAvg);
-  const lambdaAway = calculateLambda(ataGFAvg, hthGAAvg, compAwayGoalsAvg, globalAwayGoalsAvg);
+  // 4. Lambda pentru fiecare echipa
+  const lambdaHome = calculateLambda(a.gfAvg, b.gaAvg, compAvg, globalAvg);
+  const lambdaAway = calculateLambda(b.gfAvg, a.gaAvg, compAvg, globalAvg);
 
   return {
-    home: { teamId: homeTeamId, lambdaHome, matchesUsed: homeEligible.length },
-    away: { teamId: awayTeamId, lambdaAway, matchesUsed: awayEligible.length }
+    home: { teamId: homeTeamId, lambdaHome, matchesUsed: a.matchesUsed },
+    away: { teamId: awayTeamId, lambdaAway, matchesUsed: b.matchesUsed },
   };
 }
-
-/**
- * Verifică eligibilitatea unui meci.
- * Un meci este eligibil dacă: FINISHED, scoruri finite și non-negative, și data < asOf.
- */
