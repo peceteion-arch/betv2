@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { computeTeamRatings, expectedGoalsFromRatings, capGoalDifference } from './team-ratings.features';
-import { NormalizedMatch } from '../providers/match-history.types';
+import { computeTeamRatings, expectedGoalsFromRatings, capGoalDifference } from '../team-ratings.features';
+import { NormalizedMatch } from '../../providers/match-history.types';
 
 let seq = 0;
 function match(

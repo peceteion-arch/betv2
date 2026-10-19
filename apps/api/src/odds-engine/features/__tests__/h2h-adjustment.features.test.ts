@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { applyH2HAdjustment } from './h2h-adjustment.features';
+import { applyH2HAdjustment } from '../h2h-adjustment.features';
 
 const h2h = (matches: number, a: number | null, b: number | null) => ({
   matches,

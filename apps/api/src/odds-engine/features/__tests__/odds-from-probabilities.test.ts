@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { buildOddsFromProbabilities, CORRECT_SCORE_SELECTIONS } from './odds-from-probabilities';
-import { calculateMarketProbabilities } from './poisson-market.engine';
+import { buildOddsFromProbabilities, CORRECT_SCORE_SELECTIONS } from '../odds-from-probabilities';
+import { calculateMarketProbabilities } from '../poisson-market.engine';
 
 const probs = calculateMarketProbabilities(1.5, 1.2);
 const find = (lines: any[], market: string, selection: string) =>
