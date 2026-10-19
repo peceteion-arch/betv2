@@ -1,0 +1,189 @@
+
+[7m[1m[36m RUN [39m[22m[27m [36mv1.6.1[39m [90mE:/BetNando/betNANDO[39m
+
+ [32m✓[39m apps/api/tests/settlement-logic.test.ts [2m ([22m[2m35 tests[22m[2m)[22m[90m 57[2mms[22m[39m
+ [32m✓[39m apps/api/tests/team-home-away.features.test.ts [2m ([22m[2m18 tests[22m[2m)[22m[90m 66[2mms[22m[39m
+ [32m✓[39m apps/api/tests/poisson.utils.test.ts [2m ([22m[2m37 tests[22m[2m)[22m[90m 175[2mms[22m[39m
+ [32m✓[39m apps/api/tests/team-basic-stats.features.test.ts [2m ([22m[2m11 tests[22m[2m)[22m[90m 29[2mms[22m[39m
+ [33m❯[39m apps/api/tests/match.service.update.test.ts [2m ([22m[2m0 test[22m[2m)[22m
+ [32m✓[39m apps/api/src/odds-engine/features/__tests__/team-ratings.features.test.ts [2m ([22m[2m16 tests[22m[2m)[22m[90m 47[2mms[22m[39m
+ [33m❯[39m apps/api/tests/bet.service.serialization.test.ts [2m ([22m[2m0 test[22m[2m)[22m
+ [33m❯[39m apps/api/tests/schemas.test.ts [2m ([22m[2m21 tests[22m [2m|[22m [31m21 failed[39m[2m)[22m[90m 77[2mms[22m[39m
+[31m   [33m❯[31m apps/api/tests/schemas.test.ts[2m > [22mZod schemas[2m > [22mplaceBetSchema validates correct data[39m
+[31m     → FATAL: JWT_SECRET not set[39m
+[31m   [33m❯[31m apps/api/tests/schemas.test.ts[2m > [22mZod schemas[2m > [22mplaceBetSchema rejects empty selections[39m
+[31m     → FATAL: JWT_SECRET not set[39m
+[31m   [33m❯[31m apps/api/tests/schemas.test.ts[2m > [22mZod schemas[2m > [22mplaceBetSchema rejects stake < 1[39m
+[31m     → FATAL: JWT_SECRET not set[39m
+[31m   [33m❯[31m apps/api/tests/schemas.test.ts[2m > [22mZod schemas[2m > [22mpaginationSchema has defaults[39m
+[31m     → FATAL: JWT_SECRET not set[39m
+[31m   [33m❯[31m apps/api/tests/schemas.test.ts[2m > [22mZod schemas[2m > [22mpaginationSchema parses cursor[39m
+[31m     → FATAL: JWT_SECRET not set[39m
+[31m   [33m❯[31m apps/api/tests/schemas.test.ts[2m > [22mZod schemas[2m > [22mcreateManualMatchSchema validates correct data[39m
+[31m     → FATAL: JWT_SECRET not set[39m
+[31m   [33m❯[31m apps/api/tests/schemas.test.ts[2m > [22mZod schemas[2m > [22mcreateManualMatchSchema rejects missing fields[39m
+[31m     → FATAL: JWT_SECRET not set[39m
+[31m   [33m❯[31m apps/api/tests/schemas.test.ts[2m > [22mZod schemas[2m > [22mcreateManualMatchSchema accepts a naive datetime-local value[39m
+[31m     → FATAL: JWT_SECRET not set[39m
+[31m   [33m❯[31m apps/api/tests/schemas.test.ts[2m > [22mZod schemas[2m > [22mcreateManualMatchSchema rejects an unparseable date[39m
+[31m     → FATAL: JWT_SECRET not set[39m
+[31m   [33m❯[31m apps/api/tests/schemas.test.ts[2m > [22mZod schemas[2m > [22mupdateScoreSchema validates correct data[39m
+[31m     → FATAL: JWT_SECRET not set[39m
+[31m   [33m❯[31m apps/api/tests/schemas.test.ts[2m > [22mZod schemas[2m > [22mupdateScoreSchema rejects negative and fractional scores[39m
+[31m     → FATAL: JWT_SECRET not set[39m
+[31m   [33m❯[31m apps/api/tests/schemas.test.ts[2m > [22mZod schemas[2m > [22mupdateScoreSchema accepts only statuses a score can be recorded on[39m
+[31m     → FATAL: JWT_SECRET not set[39m
+[31m   [33m❯[31m apps/api/tests/schemas.test.ts[2m > [22mZod schemas[2m > [22mupdateScoreSchema rejects VOID, which has its own route[39m
+[31m     → FATAL: JWT_SECRET not set[39m
+[31m   [33m❯[31m apps/api/tests/schemas.test.ts[2m > [22mZod schemas[2m > [22mupdateMatchSchema accepts a valid edit payload[39m
+[31m     → FATAL: JWT_SECRET not set[39m
+[31m   [33m❯[31m apps/api/tests/schemas.test.ts[2m > [22mZod schemas[2m > [22mupdateMatchSchema accepts an edit without a competition[39m
+[31m     → FATAL: JWT_SECRET not set[39m
+[31m   [33m❯[31m apps/api/tests/schemas.test.ts[2m > [22mZod schemas[2m > [22mupdateMatchSchema rejects home === away[39m
+[31m     → FATAL: JWT_SECRET not set[39m
+[31m   [33m❯[31m apps/api/tests/schemas.test.ts[2m > [22mZod schemas[2m > [22mupdateMatchSchema rejects matchday < 1[39m
+[31m     → FATAL: JWT_SECRET not set[39m
+[31m   [33m❯[31m apps/api/tests/schemas.test.ts[2m > [22mZod schemas[2m > [22mupdateMatchSchema rejects a fractional matchday[39m
+[31m     → FATAL: JWT_SECRET not set[39m
+[31m   [33m❯[31m apps/api/tests/schemas.test.ts[2m > [22mZod schemas[2m > [22mupdateMatchSchema rejects an unparseable date[39m
+[31m     → FATAL: JWT_SECRET not set[39m
+[31m   [33m❯[31m apps/api/tests/schemas.test.ts[2m > [22mSCOREABLE_MATCH_STATUSES[2m > [22mis exactly LIVE and FINISHED[39m
+[31m     → FATAL: JWT_SECRET not set[39m
+[31m   [33m❯[31m apps/api/tests/schemas.test.ts[2m > [22mSCOREABLE_MATCH_STATUSES[2m > [22mexcludes every status that would reopen a match or bypass a guard[39m
+[31m     → FATAL: JWT_SECRET not set[39m
+ [32m✓[39m apps/api/tests/matchup-profile.features.test.ts [2m ([22m[2m5 tests[22m[2m)[22m[90m 29[2mms[22m[39m
+ [32m✓[39m apps/api/tests/match-history.provider.test.ts [2m ([22m[2m25 tests[22m[2m)[22m[90m 44[2mms[22m[39m
+ [32m✓[39m apps/api/tests/features/poisson-market.engine.test.ts [2m ([22m[2m18 tests[22m[2m)[22m[90m 110[2mms[22m[39m
+ [32m✓[39m apps/api/tests/team-profile.features.test.ts [2m ([22m[2m2 tests[22m[2m)[22m[90m 16[2mms[22m[39m
+ [32m✓[39m apps/api/tests/odds-engine/eligibility-integration.test.ts [2m ([22m[2m4 tests[22m[2m)[22m[90m 18[2mms[22m[39m
+ [32m✓[39m apps/api/src/odds-engine/features/__tests__/eligibility.spec.ts [2m ([22m[2m4 tests[22m[2m)[22m[90m 13[2mms[22m[39m
+ [32m✓[39m apps/api/tests/team-form.features.test.ts [2m ([22m[2m4 tests[22m[2m)[22m[90m 16[2mms[22m[39m
+ [32m✓[39m apps/api/src/odds-engine/features/__tests__/odds-from-probabilities.test.ts [2m ([22m[2m9 tests[22m[2m)[22m[90m 26[2mms[22m[39m
+ [32m✓[39m apps/api/tests/minifotbal-data.provider.test.ts [2m ([22m[2m6 tests[22m[2m)[22m[90m 29[2mms[22m[39m
+ [33m❯[39m experiments/poisson-test.test.ts [2m ([22m[2m0 test[22m[2m)[22m
+ [32m✓[39m apps/api/tests/score-distribution.utils.test.ts [2m ([22m[2m7 tests[22m[2m)[22m[90m 17[2mms[22m[39m
+ [32m✓[39m apps/api/tests/odds-engine/homeaway-stats.test.ts [2m ([22m[2m2 tests[22m[2m)[22m[90m 12[2mms[22m[39m
+ [32m✓[39m apps/api/src/odds-engine/features/competition-standings.features.test.ts [2m ([22m[2m5 tests[22m[2m)[22m[90m 43[2mms[22m[39m
+ [32m✓[39m apps/api/tests/odds-engine/competition-provider.test.ts [2m ([22m[2m2 tests[22m[2m)[22m[90m 13[2mms[22m[39m
+ [32m✓[39m apps/api/tests/odds-engine/match-eligibility.test.ts [2m ([22m[2m13 tests[22m[2m)[22m[90m 19[2mms[22m[39m
+ [33m❯[39m apps/api/tests/env.test.ts [2m ([22m[2m0 test[22m[2m)[22m
+ [32m✓[39m apps/api/src/odds-engine/features/__tests__/h2h-adjustment.features.test.ts [2m ([22m[2m8 tests[22m[2m)[22m[90m 17[2mms[22m[39m
+ [32m✓[39m apps/api/src/odds-engine/features/__tests__/match-eligibility.test.ts [2m ([22m[2m13 tests[22m[2m)[22m[90m 17[2mms[22m[39m
+ [32m✓[39m apps/api/tests/errors.test.ts [2m ([22m[2m5 tests[22m[2m)[22m[90m 12[2mms[22m[39m
+ [32m✓[39m apps/api/tests/h2h-stats.features.test.ts [2m ([22m[2m2 tests[22m[2m)[22m[90m 13[2mms[22m[39m
+ [32m✓[39m apps/api/tests/team.provider.test.ts [2m ([22m[2m4 tests[22m[2m)[22m[90m 16[2mms[22m[39m
+ [32m✓[39m apps/api/tests/odds-engine/team-form-calcs.test.ts [2m ([22m[2m1 test[22m[2m)[22m[90m 10[2mms[22m[39m
+ [32m✓[39m apps/api/tests/testDataCriteria.test.ts [2m ([22m[2m3 tests[22m[2m)[22m[90m 7[2mms[22m[39m
+ [32m✓[39m apps/api/src/odds-engine/features/poisson-market.engine.test.ts [2m ([22m[2m5 tests[22m[2m)[22m[90m 22[2mms[22m[39m
+ [32m✓[39m apps/api/tests/odds-engine/integration-competition-homeaway.test.ts [2m ([22m[2m2 tests[22m[2m)[22m[90m 15[2mms[22m[39m
+ [32m✓[39m apps/api/src/odds-engine/features/match-result.utils.test.ts [2m ([22m[2m6 tests[22m[2m)[22m[90m 18[2mms[22m[39m
+ [32m✓[39m apps/api/tests/helpers/assertTestDatabase.test.ts [2m ([22m[2m14 tests[22m[2m)[22m[90m 21[2mms[22m[39m
+ [33m❯[39m apps/web/tests/localStorage.test.ts [2m ([22m[2m0 test[22m[2m)[22m
+ [33m❯[39m apps/web/tests/hooks.test.ts [2m ([22m[2m0 test[22m[2m)[22m
+
+[31m⎯⎯⎯⎯⎯⎯[1m[7m Failed Suites 6 [27m[22m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[31m[1m[7m FAIL [27m[22m[39m experiments/poisson-test.test.ts [2m[ experiments/poisson-test.test.ts ][22m
+[31m[1mError[22m: OPREST: TEST_DB_URL nu este setată. Folosește o variabilă temporară de mediu, NU modifica .env[39m
+[36m [2m❯[22m experiments/poisson-runner.ts:[2m10:9[22m[39m
+    [90m  8| [39m[35mconst[39m [33mTEST_DB_URL[39m [33m=[39m process[33m.[39menv[33m.[39m[33mTEST_DB_URL[39m[33m;[39m
+    [90m  9| [39m[35mif[39m ([33m![39m[33mTEST_DB_URL[39m) {
+    [90m 10| [39m  [35mthrow[39m [35mnew[39m [33mError[39m([32m'OPREST: TEST_DB_URL nu este setată. Folosește o var[39m…
+    [90m   | [39m        [31m^[39m
+    [90m 11| [39m}
+    [90m 12| [39m[35mif[39m ([33m![39m[33mTEST_DB_URL[39m[33m.[39m[34mincludes[39m([32m'betleague_test'[39m)) {
+[90m [2m❯[22m experiments/poisson-test.test.ts:[2m3:31[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/27]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m apps/api/tests/bet.service.serialization.test.ts [2m[ apps/api/tests/bet.service.serialization.test.ts ][22m
+[31m[1m[7m FAIL [27m[22m[39m apps/api/tests/match.service.update.test.ts [2m[ apps/api/tests/match.service.update.test.ts ][22m
+[31m[1mError[22m: FATAL: JWT_SECRET not set[39m
+[36m [2m❯[22m apps/api/src/config/env.ts:[2m3:36[22m[39m
+    [90m  1| [39m[35mimport[39m { z } [35mfrom[39m [32m'zod'[39m[33m;[39m
+    [90m  2| [39m
+    [90m  3| [39m[35mif[39m ([33m![39mprocess[33m.[39menv[33m.[39m[33mJWT_SECRET[39m) [35mthrow[39m [35mnew[39m [33mError[39m([32m'FATAL: JWT_SECRET not se[39m…
+    [90m   | [39m                                   [31m^[39m
+    [90m  4| [39m[35mif[39m ([33m![39mprocess[33m.[39menv[33m.[39m[33mCRON_SECRET[39m) [35mthrow[39m [35mnew[39m [33mError[39m([32m'FATAL: CRON_SECRET not [39m…
+    [90m  5| [39m[35mif[39m ([33m![39mprocess[33m.[39menv[33m.[39m[33mDATABASE_URL[39m) [35mthrow[39m [35mnew[39m [33mError[39m([32m'FATAL: DATABASE_URL no[39m…
+[90m [2m❯[22m apps/api/src/services/match.service.ts:[2m2:31[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/27]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m apps/api/tests/env.test.ts [2m[ apps/api/tests/env.test.ts ][22m
+[31m[1mError[22m: FATAL: JWT_SECRET not set[39m
+[36m [2m❯[22m apps/api/src/config/env.ts:[2m3:36[22m[39m
+    [90m  1| [39m[35mimport[39m { z } [35mfrom[39m [32m'zod'[39m[33m;[39m
+    [90m  2| [39m
+    [90m  3| [39m[35mif[39m ([33m![39mprocess[33m.[39menv[33m.[39m[33mJWT_SECRET[39m) [35mthrow[39m [35mnew[39m [33mError[39m([32m'FATAL: JWT_SECRET not se[39m…
+    [90m   | [39m                                   [31m^[39m
+    [90m  4| [39m[35mif[39m ([33m![39mprocess[33m.[39menv[33m.[39m[33mCRON_SECRET[39m) [35mthrow[39m [35mnew[39m [33mError[39m([32m'FATAL: CRON_SECRET not [39m…
+    [90m  5| [39m[35mif[39m ([33m![39mprocess[33m.[39menv[33m.[39m[33mDATABASE_URL[39m) [35mthrow[39m [35mnew[39m [33mError[39m([32m'FATAL: DATABASE_URL no[39m…
+[90m [2m❯[22m apps/api/tests/env.test.ts:[2m2:31[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/27]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m apps/web/tests/hooks.test.ts [2m[ apps/web/tests/hooks.test.ts ][22m
+[31m[1mReferenceError[22m: window is not defined[39m
+[36m [2m❯[22m apps/web/tests/hooks.test.ts:[2m4:23[22m[39m
+    [90m  2| [39m
+    [90m  3| [39m[90m// Mock matchMedia[39m
+    [90m  4| [39m[33mObject[39m[33m.[39m[34mdefineProperty[39m(window[33m,[39m [32m'matchMedia'[39m[33m,[39m {
+    [90m   | [39m                      [31m^[39m
+    [90m  5| [39m  writable[33m:[39m [35mtrue[39m[33m,[39m
+    [90m  6| [39m  value[33m:[39m vi[33m.[39m[34mfn[39m()[33m.[39m[34mmockImplementation[39m((query[33m:[39m string) [33m=>[39m ({
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/27]⎯[22m[39m
+
+[31m[1m[7m FAIL [27m[22m[39m apps/web/tests/localStorage.test.ts [2m[ apps/web/tests/localStorage.test.ts ][22m
+[31m[1mReferenceError[22m: window is not defined[39m
+[36m [2m❯[22m apps/web/tests/localStorage.test.ts:[2m16:23[22m[39m
+    [90m 14| [39m})()[33m;[39m
+    [90m 15| [39m
+    [90m 16| [39m[33mObject[39m[33m.[39m[34mdefineProperty[39m(window[33m,[39m [32m'localStorage'[39m[33m,[39m { value[33m:[39m localStorageMoc…
+    [90m   | [39m                      [31m^[39m
+    [90m 17| [39m
+    [90m 18| [39m[34mdescribe[39m([32m'localStorage mock'[39m[33m,[39m () [33m=>[39m {
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/27]⎯[22m[39m
+
+[31m⎯⎯⎯⎯⎯⎯[1m[7m Failed Tests 21 [27m[22m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[31m[1m[7m FAIL [27m[22m[39m apps/api/tests/schemas.test.ts[2m > [22mZod schemas[2m > [22mplaceBetSchema validates correct data
+[31m[1m[7m FAIL [27m[22m[39m apps/api/tests/schemas.test.ts[2m > [22mZod schemas[2m > [22mplaceBetSchema rejects empty selections
+[31m[1m[7m FAIL [27m[22m[39m apps/api/tests/schemas.test.ts[2m > [22mZod schemas[2m > [22mplaceBetSchema rejects stake < 1
+[31m[1m[7m FAIL [27m[22m[39m apps/api/tests/schemas.test.ts[2m > [22mZod schemas[2m > [22mpaginationSchema has defaults
+[31m[1m[7m FAIL [27m[22m[39m apps/api/tests/schemas.test.ts[2m > [22mZod schemas[2m > [22mpaginationSchema parses cursor
+[31m[1m[7m FAIL [27m[22m[39m apps/api/tests/schemas.test.ts[2m > [22mZod schemas[2m > [22mcreateManualMatchSchema validates correct data
+[31m[1m[7m FAIL [27m[22m[39m apps/api/tests/schemas.test.ts[2m > [22mZod schemas[2m > [22mcreateManualMatchSchema rejects missing fields
+[31m[1m[7m FAIL [27m[22m[39m apps/api/tests/schemas.test.ts[2m > [22mZod schemas[2m > [22mcreateManualMatchSchema accepts a naive datetime-local value
+[31m[1m[7m FAIL [27m[22m[39m apps/api/tests/schemas.test.ts[2m > [22mZod schemas[2m > [22mcreateManualMatchSchema rejects an unparseable date
+[31m[1m[7m FAIL [27m[22m[39m apps/api/tests/schemas.test.ts[2m > [22mZod schemas[2m > [22mupdateScoreSchema validates correct data
+[31m[1m[7m FAIL [27m[22m[39m apps/api/tests/schemas.test.ts[2m > [22mZod schemas[2m > [22mupdateScoreSchema rejects negative and fractional scores
+[31m[1m[7m FAIL [27m[22m[39m apps/api/tests/schemas.test.ts[2m > [22mZod schemas[2m > [22mupdateScoreSchema accepts only statuses a score can be recorded on
+[31m[1m[7m FAIL [27m[22m[39m apps/api/tests/schemas.test.ts[2m > [22mZod schemas[2m > [22mupdateScoreSchema rejects VOID, which has its own route
+[31m[1m[7m FAIL [27m[22m[39m apps/api/tests/schemas.test.ts[2m > [22mZod schemas[2m > [22mupdateMatchSchema accepts a valid edit payload
+[31m[1m[7m FAIL [27m[22m[39m apps/api/tests/schemas.test.ts[2m > [22mZod schemas[2m > [22mupdateMatchSchema accepts an edit without a competition
+[31m[1m[7m FAIL [27m[22m[39m apps/api/tests/schemas.test.ts[2m > [22mZod schemas[2m > [22mupdateMatchSchema rejects home === away
+[31m[1m[7m FAIL [27m[22m[39m apps/api/tests/schemas.test.ts[2m > [22mZod schemas[2m > [22mupdateMatchSchema rejects matchday < 1
+[31m[1m[7m FAIL [27m[22m[39m apps/api/tests/schemas.test.ts[2m > [22mZod schemas[2m > [22mupdateMatchSchema rejects a fractional matchday
+[31m[1m[7m FAIL [27m[22m[39m apps/api/tests/schemas.test.ts[2m > [22mZod schemas[2m > [22mupdateMatchSchema rejects an unparseable date
+[31m[1m[7m FAIL [27m[22m[39m apps/api/tests/schemas.test.ts[2m > [22mSCOREABLE_MATCH_STATUSES[2m > [22mis exactly LIVE and FINISHED
+[31m[1m[7m FAIL [27m[22m[39m apps/api/tests/schemas.test.ts[2m > [22mSCOREABLE_MATCH_STATUSES[2m > [22mexcludes every status that would reopen a match or bypass a guard
+[31m[1mError[22m: FATAL: JWT_SECRET not set[39m
+[36m [2m❯[22m apps/api/src/config/env.ts:[2m3:36[22m[39m
+    [90m  1| [39m[35mimport[39m { z } [35mfrom[39m [32m'zod'[39m[33m;[39m
+    [90m  2| [39m
+    [90m  3| [39m[35mif[39m ([33m![39mprocess[33m.[39menv[33m.[39m[33mJWT_SECRET[39m) [35mthrow[39m [35mnew[39m [33mError[39m([32m'FATAL: JWT_SECRET not se[39m…
+    [90m   | [39m                                   [31m^[39m
+    [90m  4| [39m[35mif[39m ([33m![39mprocess[33m.[39menv[33m.[39m[33mCRON_SECRET[39m) [35mthrow[39m [35mnew[39m [33mError[39m([32m'FATAL: CRON_SECRET not [39m…
+    [90m  5| [39m[35mif[39m ([33m![39mprocess[33m.[39menv[33m.[39m[33mDATABASE_URL[39m) [35mthrow[39m [35mnew[39m [33mError[39m([32m'FATAL: DATABASE_URL no[39m…
+[90m [2m❯[22m apps/api/tests/schemas.test.ts:[2m5:32[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/27]⎯[22m[39m
+
+[2m Test Files [22m [1m[31m7 failed[39m[22m[2m | [22m[1m[32m30 passed[39m[22m[90m (37)[39m
+[2m      Tests [22m [1m[31m21 failed[39m[22m[2m | [22m[1m[32m286 passed[39m[22m[90m (307)[39m
+[2m   Start at [22m 12:13:49
+[2m   Duration [22m 11.81s[2m (transform 2.15s, setup 12ms, collect 3.85s, tests 1.02s, environment 21ms, prepare 14.05s)[22m
+

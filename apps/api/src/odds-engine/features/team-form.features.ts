@@ -1,18 +1,13 @@
 import { matchHistoryProvider } from '../providers/match-history.provider';
-import { NormalizedMatch } from '../providers/match-history.types';
-import { TeamFormStats, TeamFormWindowStats } from './team-form.types';
+import { TeamFormStats } from './team-form.types';
 import { isMatchEligible } from './match-eligibility.utils';
-import { getTeamMatchResult } from './match-result.utils';
+import { summarizeMatches } from './team-stats.utils';
 
 export async function getTeamFormStats(teamId: string, asOf: Date): Promise<TeamFormStats> {
-  // Temporal cutoff: only matches before asOf are eligible for form analysis.
   const allMatches = await matchHistoryProvider.getTeamMatches(teamId, asOf);
 
-  // 2. Filter eligible matches: status === 'FINISHED', both scores are not null, and date < asOf
   const eligibleMatches = allMatches.filter((match) => isMatchEligible(match, asOf));
 
-  // 3. Sort chronologically (oldest to newest)
-  // Standard sort using matchDate first, with matchId as a deterministic tie-breaker
   eligibleMatches.sort((a, b) => {
     const dateA = new Date(a.matchDate).getTime();
     const dateB = new Date(b.matchDate).getTime();
@@ -22,110 +17,14 @@ export async function getTeamFormStats(teamId: string, asOf: Date): Promise<Team
     return a.matchId.localeCompare(b.matchId);
   });
 
-  // 4. Select last 3 / 5 / 10 matches
   const last3Matches = eligibleMatches.slice(-3);
   const last5Matches = eligibleMatches.slice(-5);
   const last10Matches = eligibleMatches.slice(-10);
 
-  // 5. Calculate stats for each window
-  const last3 = calculateWindowStats(last3Matches, teamId);
-  const last5 = calculateWindowStats(last5Matches, teamId);
-  const last10 = calculateWindowStats(last10Matches, teamId);
-
   return {
     teamId,
-    last3,
-    last5,
-    last10,
-  };
-}
-
-function calculateWindowStats(matches: NormalizedMatch[], teamId: string): TeamFormWindowStats {
-  let wins = 0;
-  let draws = 0;
-  let losses = 0;
-  let points = 0;
-  let goalsFor = 0;
-  let goalsAgainst = 0;
-  let cleanSheets = 0;
-  let failedToScore = 0;
-  let bttsYes = 0;
-  let over15 = 0;
-  let over25 = 0;
-  let over35 = 0;
-
-  for (const match of matches) {
-    // Rezultatul din perspectiva echipei — logica comuna (match-result.utils)
-    const result = getTeamMatchResult(match, teamId);
-    if (!result) continue; // echipa nu joaca in meci sau lipsesc scorurile
-
-    const teamGoalsFor = result.goalsFor;
-    const teamGoalsAgainst = result.goalsAgainst;
-
-    goalsFor += teamGoalsFor;
-    goalsAgainst += teamGoalsAgainst;
-    points += result.points;
-
-    if (result.outcome === 'WIN') wins++;
-    else if (result.outcome === 'DRAW') draws++;
-    else losses++;
-
-    if (teamGoalsAgainst === 0) {
-      cleanSheets++;
-    }
-
-    if (teamGoalsFor === 0) {
-      failedToScore++;
-    }
-
-    if (teamGoalsFor > 0 && teamGoalsAgainst > 0) {
-      bttsYes++;
-    }
-
-    const totalGoals = teamGoalsFor + teamGoalsAgainst;
-    if (totalGoals >= 2) over15++;
-    if (totalGoals >= 3) over25++;
-    if (totalGoals >= 4) over35++;
-  }
-
-  const matchesCount = wins + draws + losses; // doar meciurile cu rezultat valid
-
-  const pointsPerMatch = matchesCount > 0 ? points / matchesCount : null;
-  const goalsForPerMatch = matchesCount > 0 ? goalsFor / matchesCount : null;
-  const goalsAgainstPerMatch = matchesCount > 0 ? goalsAgainst / matchesCount : null;
-  const goalDifference = goalsFor - goalsAgainst;
-  const goalDifferencePerMatch = matchesCount > 0 ? goalDifference / matchesCount : null;
-  const cleanSheetRate = matchesCount > 0 ? cleanSheets / matchesCount : null;
-  const failedToScoreRate = matchesCount > 0 ? failedToScore / matchesCount : null;
-  const bttsRate = matchesCount > 0 ? bttsYes / matchesCount : null;
-  const over15Rate = matchesCount > 0 ? over15 / matchesCount : null;
-  const over25Rate = matchesCount > 0 ? over25 / matchesCount : null;
-  const over35Rate = matchesCount > 0 ? over35 / matchesCount : null;
-
-  return {
-    matches: matchesCount,
-    wins,
-    draws,
-    losses,
-    points,
-    pointsPerMatch,
-    goalsFor,
-    goalsAgainst,
-    goalDifference,
-    goalsForPerMatch,
-    goalsAgainstPerMatch,
-    goalDifferencePerMatch,
-    cleanSheets,
-    cleanSheetRate,
-    failedToScore,
-    failedToScoreRate,
-    bttsYes,
-    bttsRate,
-    over15,
-    over15Rate,
-    over25,
-    over25Rate,
-    over35,
-    over35Rate,
+    last3: summarizeMatches(last3Matches, teamId),
+    last5: summarizeMatches(last5Matches, teamId),
+    last10: summarizeMatches(last10Matches, teamId),
   };
 }
