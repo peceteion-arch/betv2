@@ -38,6 +38,7 @@ export const placeBetSchema = z.object({
     matchId: z.string(),
     market: z.string(),
     selection: z.string(),
+    odds: z.number().min(1.01).max(1000).finite(),
   })).min(1).max(20),
 });
 

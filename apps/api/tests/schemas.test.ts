@@ -10,6 +10,63 @@ describe('Zod schemas', () => {
     expect(result.success).toBe(true);
   });
 
+  it('placeBetSchema preserves odds after safeParse', async () => {
+    const { placeBetSchema } = await import('../src/config/env');
+    const result = placeBetSchema.safeParse({
+      stake: 10,
+      selections: [{ matchId: 'm1', market: '1X2', selection: '1', odds: 2.5 }],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.selections[0].odds).toBe(2.5);
+    }
+  });
+
+  it('placeBetSchema rejects missing odds', async () => {
+    const { placeBetSchema } = await import('../src/config/env');
+    const result = placeBetSchema.safeParse({
+      stake: 10,
+      selections: [{ matchId: 'm1', market: '1X2', selection: '1' }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('placeBetSchema rejects odds below 1.01', async () => {
+    const { placeBetSchema } = await import('../src/config/env');
+    const result = placeBetSchema.safeParse({
+      stake: 10,
+      selections: [{ matchId: 'm1', market: '1X2', selection: '1', odds: 1.00 }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('placeBetSchema rejects odds above 1000', async () => {
+    const { placeBetSchema } = await import('../src/config/env');
+    const result = placeBetSchema.safeParse({
+      stake: 10,
+      selections: [{ matchId: 'm1', market: '1X2', selection: '1', odds: 1001 }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('placeBetSchema rejects NaN odds', async () => {
+    const { placeBetSchema } = await import('../src/config/env');
+    const result = placeBetSchema.safeParse({
+      stake: 10,
+      selections: [{ matchId: 'm1', market: '1X2', selection: '1', odds: NaN }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('placeBetSchema rejects infinite odds', async () => {
+    const { placeBetSchema } = await import('../src/config/env');
+    const result = placeBetSchema.safeParse({
+      stake: 10,
+      selections: [{ matchId: 'm1', market: '1X2', selection: '1', odds: Infinity }],
+    });
+    expect(result.success).toBe(false);
+  });
+
   it('placeBetSchema rejects empty selections', async () => {
     const { placeBetSchema } = await import('../src/config/env');
     const result = placeBetSchema.safeParse({ stake: 10, selections: [] });
