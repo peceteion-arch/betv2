@@ -4,6 +4,10 @@ import { Prisma } from '@prisma/client';
 import { serializeMatch } from '../lib/match.serializer';
 import { settleRunning } from '../lib/settlement-lock';
 import { oddsEvents } from '../lib/odds-events';
+import { matchHistoryProvider } from '../odds-engine/providers/match-history.provider';
+import { computeTeamRatings, expectedGoalsFromRatings } from '../odds-engine/features/team-ratings.features';
+import { calculateMarketProbabilities } from '../odds-engine/features/poisson-market.engine';
+import { buildOddsFromProbabilities } from '../odds-engine/features/odds-from-probabilities';
 
 // Odds.value is @db.Decimal, so Prisma hands it back as a Decimal that
 // serialises to a JSON string ("1.90"). The UI calls .toFixed() on it, which
@@ -334,10 +338,109 @@ export const matchService = {
     return { deleted: true as const, bets: 0 };
   },
 
+  /**
+   * Generates odds for a new match using the statistical engine.
+   *
+   * Flow:
+   * 1. Check if odds already exist (protects against re-generation)
+   * 2. Protect manual odds from being overwritten (skip if source='manual')
+   * 3. Fetch eligible historical matches from all competitions
+   * 4. Compute team ratings and expected goals
+   * 5. Calculate market probabilities via Poisson model
+   * 6. Convert to odds using buildOddsFromProbabilities()
+   * 7. Store only the newly-estimated odds
+   */
   async generateOdds(matchId: string) {
+    // Already generated — skip (do not regenerate on every read).
     const existingOdds = await prisma.odds.findMany({ where: { matchId } });
     if (existingOdds.length > 0) return;
 
+    const match = await prisma.match.findUnique({
+      where: { id: matchId },
+      select: {
+        id: true,
+        homeTeamId: true,
+        awayTeamId: true,
+        competitionId: true,
+        matchDate: true,
+      },
+    });
+    if (!match) return;
+
+    // Never overwrite odds that an operator has already marked as manual.
+    const manualExists = await prisma.odds.findFirst({
+      where: { matchId, source: 'manual' },
+    });
+    if (manualExists) return;
+
+    const asOf = new Date(match.matchDate);
+
+    // If no history is available at all, fall back to simple base odds (still
+    // stored as 'estimated'). This keeps the match displayable while the
+    // statistical model is still cold.
+    try {
+      const history = await matchHistoryProvider.getGlobalMatches(asOf);
+      if (history.length > 0) {
+        // Statistical path: connect the statistical engine to the generation flow.
+        await this._generateOddsFromStats(match, history, asOf);
+      } else {
+        await this._generateFallbackOdds(matchId);
+      }
+    } catch {
+      // Provider query failed — do not let this block match creation.
+      await this._generateFallbackOdds(matchId);
+    }
+  },
+
+  async _generateOddsFromStats(
+    match: { id: string; homeTeamId: string; awayTeamId: string; competitionId: string | null; matchDate: Date },
+    history: Array<any>,
+    asOf: Date
+  ): Promise<void> {
+    const ratingsResult = computeTeamRatings(history, asOf, {
+      competitionId: match.competitionId ?? undefined,
+    });
+
+    const expectedGoals = expectedGoalsFromRatings(
+      ratingsResult,
+      match.homeTeamId,
+      match.awayTeamId
+    );
+
+    if (!expectedGoals.lambdaA || !expectedGoals.lambdaB) {
+      // Missing team ratings (no data for these teams) → fallback.
+      await this._generateFallbackOdds(match.id);
+      return;
+    }
+
+    const marketProbs = calculateMarketProbabilities(expectedGoals.lambdaA, expectedGoals.lambdaB);
+
+    if (!marketProbs.valid || !marketProbs.converged) {
+      await this._generateFallbackOdds(match.id);
+      return;
+    }
+
+    const oddsLines = buildOddsFromProbabilities(marketProbs, {
+      margin: 0.07,
+      correctScoreMargin: 0.15,
+    });
+    if (!oddsLines) {
+      await this._generateFallbackOdds(match.id);
+      return;
+    }
+
+    const oddsToCreate = oddsLines.map(odds => ({
+      matchId: match.id,
+      market: odds.market,
+      selection: odds.selection,
+      value: odds.value,
+      source: 'estimated',
+    }));
+    await prisma.odds.createMany({ data: oddsToCreate });
+  },
+
+  /** Fallback odds used when the statistical engine cannot produce results. */
+  async _generateFallbackOdds(matchId: string) {
     const jitter = () => Math.round((0.97 + Math.random() * 0.06) * 100) / 100;
 
     const markets = [
