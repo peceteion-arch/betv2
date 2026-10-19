@@ -439,9 +439,11 @@ export const matchService = {
     await prisma.odds.createMany({ data: oddsToCreate });
   },
 
-  /** Fallback odds used when the statistical engine cannot produce results. */
+  /** Fallback odds used when the statistical engine cannot produce results.
+   * These are deterministic base values — no random jitter — so the same
+   * match always gets the same fallback odds and test reproducibility is kept.
+   */
   async _generateFallbackOdds(matchId: string) {
-    const jitter = () => Math.round((0.97 + Math.random() * 0.06) * 100) / 100;
 
     const markets = [
       { market: '1X2', selections: ['1', 'X', '2'] },
@@ -474,7 +476,7 @@ export const matchService = {
     for (const market of markets) {
       const base = baseOdds[market.market];
       for (let i = 0; i < market.selections.length; i++) {
-        const value = base ? base[i] * jitter() : 2.00 * jitter();
+        const value = base ? base[i] : 2.00;
         oddsToCreate.push({
           matchId,
           market: market.market,
