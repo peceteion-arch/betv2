@@ -73,4 +73,22 @@ describe('isMatchEligible common rule', () => {
   it('zero score is eligible (not treated as missing)', () => {
     expect(isMatchEligible(makeMatch({ homeScore: 0, awayScore: 0 }), asOf)).toBe(true);
   });
+
+  it('FORFEIT match is NOT eligible even with valid FINISHED status and scores', () => {
+    // Matches awarded/forfeited must not influence statistical ratings.
+    expect(isMatchEligible(makeMatch({ status: 'FINISHED', homeScore: 3, awayScore: 0, isForfeit: true }), asOf)).toBe(false);
+  });
+
+  it('regular FINISHED match with same score is eligible', () => {
+    // Same scoreline as a forfeit, but not marked as forfeit -> should be eligible.
+    expect(isMatchEligible(makeMatch({ status: 'FINISHED', homeScore: 3, awayScore: 0, isForfeit: false }), asOf)).toBe(true);
+  });
+
+  it('forfeit defaults to false when omitted', () => {
+    // Backwards compatibility: old matches without isForfeit field should remain eligible.
+    const match = makeMatch({ status: 'FINISHED', homeScore: 2, awayScore: 1 });
+    // isForfeit is not set -> defaults to false in the interface
+    expect(match.isForfeit).toBeUndefined();
+    expect(isMatchEligible(match, asOf)).toBe(true);
+  });
 });

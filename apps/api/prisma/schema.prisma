@@ -69,6 +69,7 @@ model Match {
   matchDate     DateTime    @map("match_date")
   status        String      @default("SCHEDULED")
   previousStatus String?   @map("previous_status")
+  isForfeit     Boolean   @default(false) @map("is_forfeit")
   homeScore     Int?        @map("home_score")
   awayScore     Int?        @map("away_score")
   halfTimeHome  Int?        @map("half_time_home")

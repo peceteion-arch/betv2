@@ -228,7 +228,7 @@ export const matchService = {
     return created && { ...serializeMatch(created), odds: mapOdds(created.odds) };
   },
 
-  async updateScore(id: string, data: { homeScore: number; awayScore: number; status: string }) {
+  async updateScore(id: string, data: { homeScore: number; awayScore: number; status: string; isForfeit?: boolean }) {
     // The zod schema already restricts status to LIVE/FINISHED, but this is the
     // layer that actually writes the column, so it re-checks. Two reasons it
     // must not accept anything else: SCHEDULED re-opens a finished match for
@@ -263,14 +263,23 @@ export const matchService = {
       });
       if (settledTickets > 0) {
         throw new Error(
-          `Não é possível corrigir o resultado: ${settledTickets} aposta(s) neste jogo já foram decididas (settlement executado).`
+          `Não é possível corrigir o resultado: ${settledTickets} aposta(s) neste jogo já foram decidise (settlement executado).`
         );
       }
     }
 
+    const updateData: Prisma.MatchUncheckedUpdateInput = {
+      homeScore: data.homeScore,
+      awayScore: data.awayScore,
+      status: data.status,
+    };
+    if (data.isForfeit !== undefined) {
+      updateData.isForfeit = data.isForfeit;
+    }
+
     await prisma.match.update({
       where: { id },
-      data: { homeScore: data.homeScore, awayScore: data.awayScore, status: data.status },
+      data: updateData,
     });
 
     const updated = await prisma.match.findUnique({

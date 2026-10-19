@@ -79,6 +79,7 @@ export const updateScoreSchema = z.object({
   homeScore: z.number().int().min(0),
   awayScore: z.number().int().min(0),
   status: z.enum(SCOREABLE_MATCH_STATUSES).optional().default('FINISHED'),
+  isForfeit: z.boolean().optional().default(false),
 });
 
 export const updateMatchSchema = z.object({

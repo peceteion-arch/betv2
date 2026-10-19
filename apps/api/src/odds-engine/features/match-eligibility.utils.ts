@@ -13,6 +13,10 @@ import { NormalizedMatch } from '../providers/match-history.types';
  * - Nu inventăm clasamente sau valori de putere pentru echipe.
  */
 export function isMatchEligible(match: NormalizedMatch, asOf: Date): boolean {
+  // Meciurile acordate la masa verde sunt excluse explicit din calculele
+  // statistice — scorul lor nu reflectă performanța reală a echipelor.
+  if (match.isForfeit) return false;
+
   // 1. Status finalizat
   if (match.status !== 'FINISHED') return false;
 

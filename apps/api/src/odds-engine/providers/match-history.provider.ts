@@ -21,6 +21,7 @@ function normalizeMatch(match: MatchWithTeams): NormalizedMatch {
     status: match.status,
     homeScore: match.homeScore ?? null,
     awayScore: match.awayScore ?? null,
+    isForfeit: match.isForfeit ?? false,
   };
 }
 

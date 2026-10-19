@@ -10,4 +10,5 @@ export interface NormalizedMatch {
   status: string;
   homeScore: number | null;
   awayScore: number | null;
+  isForfeit?: boolean;
 }
