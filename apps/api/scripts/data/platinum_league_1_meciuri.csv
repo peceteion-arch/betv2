@@ -1,0 +1,43 @@
+﻿etapa,data,ora,teren,gazda_id,gazda,oaspete_id,oaspete,goluri_gazda,goluri_oaspete,status
+1,2026-10-20,19:00,T1,14,Ajax Dulcisimo,1,Squadra Azzurra,,,PROGRAMAT
+1,2026-09-13,20:10,T1,15,Partizan,8,Inter Galactic,2,4,FINAL
+1,2026-09-13,19:20,T1,2,Fiorentina,9,Armata B300,2,0,FINAL
+1,2026-09-13,17:40,T1,10,Lupii Dacici,7,Micasa,1,4,FINAL
+1,2026-09-12,20:10,T1,3,Phoenix,12,SNPP Galati,5,0,FINAL
+1,2026-09-12,19:20,T1,5,Amicis Aventin Braila,16,Damen Rapid,1,4,FINAL
+1,2026-09-12,18:30,T1,13,Al Ahly Galati,11,Dunarea Galati,1,0,FINAL
+2,2026-09-29,19:00,T1,9,Armata B300,10,Lupii Dacici,2,1,FINAL
+2,2026-09-20,20:10,T1,8,Inter Galactic,16,Damen Rapid,1,4,FINAL
+2,2026-09-20,19:20,T1,3,Phoenix,11,Dunarea Galati,2,2,FINAL
+2,2026-09-20,18:30,T1,5,Amicis Aventin Braila,7,Micasa,0,3,FINAL
+2,2026-09-20,17:40,T1,13,Al Ahly Galati,15,Partizan,5,1,FINAL
+2,2026-09-19,19:20,T1,2,Fiorentina,14,Ajax Dulcisimo,0,4,FINAL
+2,2026-09-19,18:30,T1,1,Squadra Azzurra,12,SNPP Galati,1,6,FINAL
+3,2026-10-14,19:00,T1,2,Fiorentina,12,SNPP Galati,0,5,FINAL
+3,2026-10-13,19:00,T1,15,Partizan,16,Damen Rapid,1,5,FINAL
+3,2026-10-06,19:00,T2,3,Phoenix,13,Al Ahly Galati,3,2,FINAL
+3,2026-10-06,19:00,T1,10,Lupii Dacici,14,Ajax Dulcisimo,1,6,FINAL
+3,2026-09-27,20:10,T1,1,Squadra Azzurra,11,Dunarea Galati,3,0,FINAL
+3,2026-09-27,20:10,T2,8,Inter Galactic,7,Micasa,1,6,FINAL
+3,2026-09-27,18:30,T1,5,Amicis Aventin Braila,9,Armata B300,6,2,FINAL
+4,2026-10-21,19:00,T1,16,Damen Rapid,3,Phoenix,,,PROGRAMAT
+4,2026-10-08,20:00,T1,15,Partizan,2,Fiorentina,3,2,FINAL
+4,2026-10-04,20:10,T1,7,Micasa,13,Al Ahly Galati,1,3,FINAL
+4,2026-10-04,17:40,T1,12,SNPP Galati,14,Ajax Dulcisimo,1,4,FINAL
+4,2026-10-03,20:10,T1,8,Inter Galactic,5,Amicis Aventin Braila,1,2,FINAL
+4,2026-10-03,19:20,T1,1,Squadra Azzurra,10,Lupii Dacici,3,1,FINAL
+4,2026-10-03,18:30,T1,11,Dunarea Galati,9,Armata B300,5,1,FINAL
+5,,,T1,14,Ajax Dulcisimo,16,Damen Rapid,,,AMANAT
+5,2026-10-11,20:10,T1,11,Dunarea Galati,15,Partizan,1,4,FINAL
+5,2026-10-11,19:20,T1,9,Armata B300,1,Squadra Azzurra,2,3,FINAL
+5,2026-10-11,17:40,T1,10,Lupii Dacici,13,Al Ahly Galati,0,5,FINAL
+5,2026-10-10,20:10,T1,7,Micasa,12,SNPP Galati,3,3,FINAL
+5,2026-10-10,19:20,T1,5,Amicis Aventin Braila,2,Fiorentina,5,1,FINAL
+5,2026-10-11,18:30,T1,8,Inter Galactic,3,Phoenix,0,6,MASA_VERDE
+6,2026-10-17,18:30,T1,3,Phoenix,5,Amicis Aventin Braila,,,PROGRAMAT
+6,2026-10-17,20:10,T1,9,Armata B300,15,Partizan,,,PROGRAMAT
+6,2026-10-18,17:40,T1,16,Damen Rapid,1,Squadra Azzurra,,,PROGRAMAT
+6,2026-10-18,18:30,T1,7,Micasa,2,Fiorentina,,,PROGRAMAT
+6,2026-10-18,19:20,T1,12,SNPP Galati,10,Lupii Dacici,,,PROGRAMAT
+6,,,T1,14,Ajax Dulcisimo,13,Al Ahly Galati,,,AMANAT
+6,,,T1,11,Dunarea Galati,8,Inter Galactic,,,AMANAT

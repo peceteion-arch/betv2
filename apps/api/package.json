@@ -11,6 +11,8 @@
     "test:watch": "vitest",
     "cleanup:test-data": "tsx scripts/cleanup-test-data.ts",
     "import:minifotbal": "tsx scripts/import-minifotbal.ts",
+    "reset:matches": "tsx scripts/reset-matches.ts",
+    "import:matches": "tsx scripts/import-matches.ts",
     "test:e2e": "tsx tests/e2e-settlement.ts"
   },
   "prisma": {
