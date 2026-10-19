@@ -137,8 +137,10 @@ describe('matchService.generateOdds', () => {
         const callArgs = (prisma.odds.createMany as any).mock.calls[0][0];
         expect(callArgs.data).toBeDefined();
         expect(callArgs.data.length).toBeGreaterThan(0);
-        // Fallback uses jitter so we just verify it was called with 'estimated' source
-        expect(callArgs.data[0].source).toBe('estimated');
+        // Fallback uses deterministic base values — no jitter
+        const oneX2 = callArgs.data.filter((o: any) => o.market === '1X2');
+        expect(oneX2.map((o: any) => o.value)).toEqual([1.90, 3.50, 3.80]);
+        expect(oneX2.every((o: any) => o.source === 'estimated')).toBe(true);
     });
 
     it('should fall back to base odds when statistical engine fails', async () => {
