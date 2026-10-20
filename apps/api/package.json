@@ -9,6 +9,7 @@
     "lint": "eslint src --ext .ts",
     "test": "vitest run",
     "test:watch": "vitest",
+    "backtest:odds": "tsx scripts/backtest-odds.ts",
     "cleanup:test-data": "tsx scripts/cleanup-test-data.ts",
     "import:minifotbal": "tsx scripts/import-minifotbal.ts",
     "reset:matches": "tsx scripts/reset-matches.ts",
